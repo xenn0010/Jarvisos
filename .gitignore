@@ -20,3 +20,4 @@ holofabricator/backend/static/meshes/
 # OS
 .DS_Store
 Thumbs.db
+nul

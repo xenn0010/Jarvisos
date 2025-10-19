@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JARVIS - AI Assistant</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0a0e27, #1a1a2e);
+            color: #00f7ff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 48px;
+            background: linear-gradient(135deg, #00f7ff, #0066ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .tagline {
+            font-size: 18px;
+            color: #666;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .upload-zone {
+            background: rgba(0, 247, 255, 0.05);
+            border: 3px dashed #00f7ff;
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .upload-zone:hover {
+            background: rgba(0, 247, 255, 0.1);
+            border-color: #0066ff;
+        }
+
+        .upload-zone.dragover {
+            background: rgba(0, 247, 255, 0.2);
+            transform: scale(1.02);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .upload-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+
+        .upload-text {
+            font-size: 20px;
+            color: #00f7ff;
+        }
+
+        #preview-container {
+            text-align: center;
+            margin: 20px 0;
+            display: none;
+        }
+
+        #preview {
+            max-width: 100%;
+            max-height: 400px;
+            border-radius: 15px;
+            border: 3px solid #00f7ff;
+            box-shadow: 0 0 30px rgba(0, 247, 255, 0.3);
+        }
+
+        .conversation {
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #00f7ff;
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            padding: 15px 20px;
+            border-radius: 15px;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            background: rgba(0, 102, 255, 0.2);
+            border-left: 4px solid #0066ff;
+            margin-left: 20px;
+        }
+
+        .message.ai {
+            background: rgba(0, 247, 255, 0.1);
+            border-left: 4px solid #00f7ff;
+            margin-right: 20px;
+        }
+
+        .message-label {
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            opacity: 0.7;
+        }
+
+        .message-text {
+            font-size: 16px;
+            line-height: 1.6;
+        }
+
+        .input-area {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.4);
+            border: 2px solid #00f7ff;
+            border-radius: 15px;
+            padding: 15px 20px;
+            color: #00f7ff;
+            font-size: 16px;
+            outline: none;
+        }
+
+        input[type="text"]:focus {
+            border-color: #0066ff;
+            box-shadow: 0 0 20px rgba(0, 102, 255, 0.3);
+        }
+
+        button {
+            background: linear-gradient(135deg, #00f7ff, #0066ff);
+            border: none;
+            padding: 15px 30px;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 5px 20px rgba(0, 247, 255, 0.4);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0, 247, 255, 0.6);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .quick-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .quick-btn {
+            background: rgba(0, 247, 255, 0.1);
+            border: 2px solid #00f7ff;
+            padding: 10px 20px;
+            color: #00f7ff;
+            font-size: 14px;
+            border-radius: 25px;
+            cursor: pointer;
+        }
+
+        .quick-btn:hover {
+            background: rgba(0, 247, 255, 0.2);
+        }
+
+        .status {
+            text-align: center;
+            padding: 15px;
+            background: rgba(0, 247, 255, 0.1);
+            border: 2px solid #00f7ff;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(0, 247, 255, 0.3);
+            border-top-color: #00f7ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .audio-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: #00ff00;
+            border-radius: 50%;
+            margin-right: 10px;
+            animation: blink 1s ease-in-out infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 JARVIS AI</h1>
+            <div class="tagline">Just Ask - I'll Analyze & Respond</div>
+        </div>
+
+        <div class="status" id="status">
+            Ready - Upload an image or ask a question
+        </div>
+
+        <div class="upload-zone" id="upload-zone">
+            <input type="file" id="file-input" accept="image/*" capture="environment">
+            <div class="upload-icon">📸</div>
+            <div class="upload-text">Tap to Upload Image / Take Photo</div>
+        </div>
+
+        <div id="preview-container">
+            <img id="preview" alt="Preview">
+        </div>
+
+        <div class="conversation" id="conversation">
+            <div class="message ai">
+                <div class="message-label">JARVIS</div>
+                <div class="message-text">Hello! I'm JARVIS, your AI vision assistant. Upload an image and I'll analyze it, or ask me anything!</div>
+            </div>
+        </div>
+
+        <div class="quick-actions">
+            <button class="quick-btn" onclick="askQuestion('What parts does this have?')">📋 List Parts</button>
+            <button class="quick-btn" onclick="askQuestion('What material is this?')">🔧 Materials</button>
+            <button class="quick-btn" onclick="askQuestion('How does this work?')">⚙️ Explain</button>
+            <button class="quick-btn" onclick="askQuestion('Is this valuable?')">💎 Value</button>
+        </div>
+
+        <div class="input-area">
+            <input type="text" id="question-input" placeholder="Ask anything about the image...">
+            <button onclick="sendQuestion()">Ask</button>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.protocol + '//' + window.location.hostname + ':8000';
+
+        const fileInput = document.getElementById('file-input');
+        const uploadZone = document.getElementById('upload-zone');
+        const preview = document.getElementById('preview');
+        const previewContainer = document.getElementById('preview-container');
+        const conversation = document.getElementById('conversation');
+        const questionInput = document.getElementById('question-input');
+        const status = document.getElementById('status');
+
+        let currentScanId = null;
+        let currentAnalysis = null;
+        let analyzing = false;
+        let synth = window.speechSynthesis;
+
+        // Upload zone click
+        uploadZone.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // Drag and drop
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+
+        uploadZone.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                await handleImageUpload(file);
+            }
+        });
+
+        // File selection
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                await handleImageUpload(file);
+            }
+        });
+
+        // Enter key
+        questionInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendQuestion();
+            }
+        });
+
+        async function handleImageUpload(file) {
+            if (analyzing) return;
+
+            try {
+                analyzing = true;
+                status.innerHTML = '<span class="loading"></span> Uploading image...';
+
+                // Show preview
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    preview.src = e.target.result;
+                    previewContainer.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+
+                // Upload to backend
+                const formData = new FormData();
+                formData.append('file', file);
+
+                status.innerHTML = '<span class="loading"></span> AI analyzing image...';
+
+                const response = await fetch(`${API_URL}/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                currentScanId = data.scan_id;
+                currentAnalysis = data.analysis;
+
+                // Display analysis
+                addMessage('ai', formatAnalysis(data.analysis));
+
+                // Speak summary
+                speakAnalysis(data.analysis);
+
+                status.innerHTML = '<span class="audio-indicator"></span>Analysis complete - Ask me anything!';
+
+            } catch (error) {
+                status.textContent = '❌ Error: ' + error.message;
+                console.error('Upload error:', error);
+            } finally {
+                analyzing = false;
+            }
+        }
+
+        function formatAnalysis(analysis) {
+            let text = `<strong>${analysis.object_name || 'Unknown Object'}</strong><br><br>`;
+            text += `<strong>Category:</strong> ${analysis.category || 'N/A'}<br><br>`;
+            text += `${analysis.description || ''}<br><br>`;
+
+            if (analysis.parts && analysis.parts.length > 0) {
+                text += `<strong>Key Components (${analysis.parts.length}):</strong><br>`;
+                analysis.parts.slice(0, 5).forEach(part => {
+                    text += `• <strong>${part.name}</strong>: ${part.function || ''}<br>`;
+                });
+            }
+
+            return text;
+        }
+
+        function speakAnalysis(analysis) {
+            if (!synth) return;
+
+            let text = `I see ${analysis.object_name || 'an object'}. `;
+
+            if (analysis.category) {
+                text += `It's ${analysis.category}. `;
+            }
+
+            if (analysis.parts && analysis.parts.length > 0) {
+                text += `I identified ${analysis.parts.length} main components.`;
+            }
+
+            speak(text);
+        }
+
+        function speak(text) {
+            if (!synth) return;
+
+            synth.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            synth.speak(utterance);
+        }
+
+        async function sendQuestion() {
+            const question = questionInput.value.trim();
+            if (!question) return;
+
+            await askQuestion(question);
+            questionInput.value = '';
+        }
+
+        async function askQuestion(question) {
+            if (!currentScanId) {
+                addMessage('ai', 'Please upload an image first, then I can answer questions about it!');
+                speak('Please upload an image first.');
+                return;
+            }
+
+            // Show user question
+            addMessage('user', question);
+
+            try {
+                status.innerHTML = '<span class="loading"></span> Thinking...';
+
+                const response = await fetch(`${API_URL}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        scan_id: currentScanId,
+                        question: question
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // Show AI response
+                addMessage('ai', data.answer);
+
+                // Speak response
+                speak(data.answer);
+
+                status.innerHTML = '<span class="audio-indicator"></span>Response complete';
+
+            } catch (error) {
+                addMessage('ai', '❌ Sorry, I encountered an error: ' + error.message);
+                status.textContent = '❌ Error';
+            }
+        }
+
+        function addMessage(type, text) {
+            const msg = document.createElement('div');
+            msg.className = `message ${type}`;
+            msg.innerHTML = `
+                <div class="message-label">${type === 'user' ? 'YOU' : 'JARVIS'}</div>
+                <div class="message-text">${text}</div>
+            `;
+            conversation.appendChild(msg);
+            conversation.scrollTop = conversation.scrollHeight;
+        }
+
+        // Test backend
+        fetch(`${API_URL}/`)
+            .then(r => r.json())
+            .then(data => {
+                console.log('✓ Backend connected:', data.model);
+            })
+            .catch(err => {
+                status.textContent = '⚠️ Backend disconnected';
+            });
+    </script>
+</body>
+</html>

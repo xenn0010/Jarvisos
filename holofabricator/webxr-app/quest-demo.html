@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Vision - Quest 2</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #000000, #1a1a2e);
+            color: #00f7ff;
+            overflow-x: hidden;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        h1 {
+            font-size: 36px;
+            margin-bottom: 20px;
+            text-align: center;
+            background: linear-gradient(135deg, #00f7ff, #0066ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        #status {
+            font-size: 18px;
+            padding: 15px 25px;
+            background: rgba(0, 247, 255, 0.1);
+            border: 2px solid #00f7ff;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .upload-section {
+            background: rgba(0, 0, 0, 0.5);
+            border: 3px dashed #00f7ff;
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #00f7ff, #0066ff);
+            border: none;
+            padding: 25px 50px;
+            color: white;
+            font-size: 22px;
+            font-weight: bold;
+            border-radius: 15px;
+            cursor: pointer;
+            box-shadow: 0 5px 30px rgba(0, 247, 255, 0.5);
+            margin: 10px;
+        }
+
+        .upload-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #preview {
+            max-width: 100%;
+            border-radius: 15px;
+            margin: 20px 0;
+            display: none;
+            border: 3px solid #00f7ff;
+        }
+
+        #results {
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #00f7ff;
+            border-radius: 15px;
+            padding: 25px;
+            display: none;
+            margin-top: 20px;
+        }
+
+        .result-title {
+            font-size: 28px;
+            font-weight: bold;
+            color: #00f7ff;
+            margin-bottom: 15px;
+        }
+
+        .result-category {
+            font-size: 18px;
+            color: #0066ff;
+            margin-bottom: 15px;
+        }
+
+        .result-description {
+            font-size: 16px;
+            line-height: 1.6;
+            color: #ffffff;
+            margin-bottom: 20px;
+        }
+
+        .parts-section {
+            margin-top: 20px;
+        }
+
+        .part-item {
+            background: rgba(0, 247, 255, 0.1);
+            border-left: 4px solid #00f7ff;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0, 247, 255, 0.3);
+            border-top-color: #00f7ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .voice-btn {
+            background: linear-gradient(135deg, #ff0066, #ff6600);
+            border: none;
+            padding: 25px 50px;
+            color: white;
+            font-size: 22px;
+            font-weight: bold;
+            border-radius: 15px;
+            cursor: pointer;
+            box-shadow: 0 5px 30px rgba(255, 0, 102, 0.5);
+            margin: 10px;
+        }
+
+        .voice-btn.listening {
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        #transcript {
+            font-size: 16px;
+            padding: 12px 20px;
+            background: rgba(102, 0, 255, 0.2);
+            border: 2px solid #6600ff;
+            border-radius: 10px;
+            margin: 15px 0;
+            font-style: italic;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 AI Vision Assistant</h1>
+
+        <div id="status">Ready - Take a photo or upload an image</div>
+        <div id="transcript"></div>
+
+        <div class="upload-section">
+            <p style="font-size: 20px; margin-bottom: 20px;">📸 Capture or Upload Image</p>
+
+            <input type="file" id="file-input" accept="image/*" capture="environment">
+            <button class="upload-btn" onclick="document.getElementById('file-input').click()">
+                📷 Take Photo / Upload
+            </button>
+
+            <button class="voice-btn" id="voice-btn">
+                🎤 Voice Command
+            </button>
+
+            <img id="preview" alt="Preview">
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const API_URL = window.location.protocol + '//' + window.location.hostname + ':8000';
+
+        const fileInput = document.getElementById('file-input');
+        const preview = document.getElementById('preview');
+        const status = document.getElementById('status');
+        const results = document.getElementById('results');
+        const voiceBtn = document.getElementById('voice-btn');
+        const transcript = document.getElementById('transcript');
+
+        let analyzing = false;
+        let recognition = null;
+        let synth = window.speechSynthesis;
+
+        // Initialize speech recognition
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            recognition.onresult = async (event) => {
+                const voiceCommand = event.results[0][0].transcript;
+                transcript.style.display = 'block';
+                transcript.textContent = `You said: "${voiceCommand}"`;
+
+                voiceBtn.classList.remove('listening');
+                voiceBtn.textContent = '🎤 Voice Command';
+
+                // Process voice command
+                processVoiceCommand(voiceCommand);
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Speech error:', event.error);
+                status.textContent = 'Voice error: ' + event.error;
+                voiceBtn.classList.remove('listening');
+                voiceBtn.textContent = '🎤 Voice Command';
+            };
+
+            recognition.onend = () => {
+                voiceBtn.classList.remove('listening');
+                voiceBtn.textContent = '🎤 Voice Command';
+            };
+        } else {
+            voiceBtn.textContent = '🎤 Voice Not Supported';
+            voiceBtn.disabled = true;
+        }
+
+        // Voice button
+        voiceBtn.addEventListener('click', () => {
+            if (!recognition) return;
+
+            try {
+                voiceBtn.classList.add('listening');
+                voiceBtn.textContent = '🔴 Listening...';
+                status.textContent = 'Listening for command...';
+                recognition.start();
+            } catch (error) {
+                console.error('Recognition error:', error);
+                voiceBtn.classList.remove('listening');
+                voiceBtn.textContent = '🎤 Voice Command';
+            }
+        });
+
+        function processVoiceCommand(command) {
+            const lower = command.toLowerCase();
+
+            if (lower.includes('hello') || lower.includes('hi')) {
+                speak('Hello! I am your AI vision assistant. Upload a photo and I will analyze it for you.');
+            } else if (lower.includes('help')) {
+                speak('Upload an image and I will identify objects, solve math equations, and analyze whatever you show me.');
+            } else {
+                speak('I am ready to analyze images. Please upload a photo.');
+            }
+        }
+
+        function speak(text) {
+            if (!synth) return;
+
+            synth.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            synth.speak(utterance);
+        }
+
+        // File selection
+        fileInput.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+
+            // Upload and analyze
+            await analyzeImage(file);
+        });
+
+        async function analyzeImage(file) {
+            if (analyzing) return;
+
+            try {
+                analyzing = true;
+                status.innerHTML = '<span class="loading"></span> Uploading to AI...';
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const response = await fetch(`${API_URL}/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+
+                status.innerHTML = '<span class="loading"></span> AI analyzing...';
+
+                const data = await response.json();
+
+                // Display results
+                displayResults(data.analysis);
+
+                // Speak results
+                speakResults(data.analysis);
+
+                status.textContent = '✓ Analysis complete!';
+
+            } catch (error) {
+                status.textContent = 'Error: ' + error.message;
+                console.error('Analysis error:', error);
+            } finally {
+                analyzing = false;
+            }
+        }
+
+        function displayResults(analysis) {
+            if (!analysis) return;
+
+            results.style.display = 'block';
+            results.innerHTML = `
+                <div class="result-title">${analysis.object_name || 'Unknown Object'}</div>
+                <div class="result-category">Category: ${analysis.category || 'N/A'}</div>
+                <div class="result-description">${analysis.description || ''}</div>
+            `;
+
+            if (analysis.parts && analysis.parts.length > 0) {
+                results.innerHTML += '<div class="parts-section"><h3 style="color: #00f7ff; margin-bottom: 15px;">Components:</h3>';
+                analysis.parts.slice(0, 8).forEach(part => {
+                    results.innerHTML += `
+                        <div class="part-item">
+                            <strong style="color: #00f7ff;">${part.name}</strong><br>
+                            <span style="color: #ccc;">${part.function || ''}</span>
+                        </div>
+                    `;
+                });
+                results.innerHTML += '</div>';
+            }
+        }
+
+        function speakResults(analysis) {
+            if (!analysis) return;
+
+            let text = '';
+
+            if (analysis.object_name) {
+                text = `I see ${analysis.object_name}. `;
+            }
+
+            if (analysis.category) {
+                text += `It's a ${analysis.category}. `;
+            }
+
+            if (analysis.parts && analysis.parts.length > 0) {
+                text += `I identified ${analysis.parts.length} main components.`;
+            }
+
+            if (text) {
+                speak(text);
+            }
+        }
+
+        // Test backend connection
+        fetch(`${API_URL}/`)
+            .then(r => r.json())
+            .then(data => {
+                console.log('✓ Backend:', data.model);
+            })
+            .catch(err => {
+                status.textContent = '⚠️ Cannot connect to backend. Check network.';
+                console.error('Backend error:', err);
+            });
+    </script>
+</body>
+</html>

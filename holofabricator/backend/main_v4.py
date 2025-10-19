@@ -311,7 +311,7 @@ async def handle_image_upload(scan_id: str, contents: bytes):
 
 async def analyze_with_gemini(image: Image.Image, is_3d_scan: bool = False):
     """Analyze image with Gemini 2.5 Pro"""
-    print(f"[AI] Analyzing with Gemini 2.5 Pro...")
+    print(f"[AI] Analyzing with Gemini 2.5 Flash...")
 
     context = "3D scanned model" if is_3d_scan else "photographed object"
 

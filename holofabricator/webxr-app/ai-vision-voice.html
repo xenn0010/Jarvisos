@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Vision + Voice - JARVIS Mode</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #000000, #1a1a2e);
+            color: #00f7ff;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            padding: 20px;
+        }
+
+        h1 {
+            font-size: 42px;
+            margin-bottom: 20px;
+            text-align: center;
+            background: linear-gradient(135deg, #00f7ff, #0066ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(0, 247, 255, 0.5);
+        }
+
+        #video-container {
+            position: relative;
+            width: 90vw;
+            max-width: 700px;
+            border: 3px solid #00f7ff;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(0, 247, 255, 0.3);
+            margin-bottom: 20px;
+        }
+
+        #camera-feed {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            background: linear-gradient(135deg, #00f7ff, #0066ff);
+            border: none;
+            padding: 18px 35px;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 5px 20px rgba(0, 247, 255, 0.4);
+        }
+
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px rgba(0, 247, 255, 0.6);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        button.recording {
+            background: linear-gradient(135deg, #ff0066, #ff6600);
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        #status {
+            font-size: 16px;
+            padding: 12px 25px;
+            background: rgba(0, 247, 255, 0.1);
+            border: 2px solid #00f7ff;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            min-height: 45px;
+            text-align: center;
+            max-width: 90vw;
+        }
+
+        #transcript {
+            font-size: 14px;
+            padding: 10px 20px;
+            background: rgba(102, 0, 255, 0.2);
+            border: 2px solid #6600ff;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            min-height: 40px;
+            max-width: 90vw;
+            font-style: italic;
+            display: none;
+        }
+
+        #results {
+            width: 90vw;
+            max-width: 700px;
+            max-height: 35vh;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #00f7ff;
+            border-radius: 15px;
+            padding: 20px;
+            display: none;
+        }
+
+        .result-item {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: rgba(0, 247, 255, 0.1);
+            border-left: 4px solid #00f7ff;
+            border-radius: 8px;
+        }
+
+        .result-title {
+            font-size: 22px;
+            font-weight: bold;
+            color: #00f7ff;
+            margin-bottom: 8px;
+        }
+
+        .result-category {
+            font-size: 15px;
+            color: #0066ff;
+            margin-bottom: 8px;
+        }
+
+        .result-description {
+            font-size: 14px;
+            line-height: 1.5;
+            color: #ffffff;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 3px solid rgba(0, 247, 255, 0.3);
+            border-top-color: #00f7ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .voice-status {
+            font-size: 14px;
+            color: #ff6600;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 AI Vision + Voice</h1>
+
+        <div id="status">Ready to start</div>
+        <div id="transcript"></div>
+
+        <div id="video-container" class="hidden">
+            <video id="camera-feed" autoplay playsinline></video>
+        </div>
+
+        <div class="controls">
+            <button id="start-camera">📷 Start Camera</button>
+            <button id="capture-btn" class="hidden">👁️ Analyze Scene</button>
+            <button id="voice-btn" class="hidden">🎤 Voice Command</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <canvas id="canvas" style="display: none;"></canvas>
+
+    <script>
+        const API_URL = window.location.protocol + '//' + window.location.hostname + ':8000';
+
+        const video = document.getElementById('camera-feed');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('start-camera');
+        const captureBtn = document.getElementById('capture-btn');
+        const voiceBtn = document.getElementById('voice-btn');
+        const status = document.getElementById('status');
+        const transcript = document.getElementById('transcript');
+        const results = document.getElementById('results');
+        const videoContainer = document.getElementById('video-container');
+
+        let stream = null;
+        let analyzing = false;
+        let recognition = null;
+        let synth = window.speechSynthesis;
+
+        // Initialize speech recognition
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            recognition.onresult = async (event) => {
+                const voiceCommand = event.results[0][0].transcript;
+                transcript.style.display = 'block';
+                transcript.textContent = `You said: "${voiceCommand}"`;
+
+                voiceBtn.classList.remove('recording');
+                voiceBtn.textContent = '🎤 Voice Command';
+
+                await processVoiceCommand(voiceCommand);
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Speech recognition error:', event.error);
+                status.textContent = 'Voice error: ' + event.error;
+                voiceBtn.classList.remove('recording');
+                voiceBtn.textContent = '🎤 Voice Command';
+            };
+
+            recognition.onend = () => {
+                voiceBtn.classList.remove('recording');
+                voiceBtn.textContent = '🎤 Voice Command';
+            };
+        } else {
+            console.warn('Speech recognition not supported');
+        }
+
+        // Start camera
+        startBtn.addEventListener('click', async () => {
+            try {
+                status.textContent = 'Starting camera...';
+
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                });
+
+                video.srcObject = stream;
+                videoContainer.classList.remove('hidden');
+                captureBtn.classList.remove('hidden');
+                voiceBtn.classList.remove('hidden');
+                startBtn.classList.add('hidden');
+                status.textContent = '✓ Camera ready - Use buttons or voice commands';
+
+            } catch (error) {
+                status.textContent = 'Camera error: ' + error.message;
+                console.error('Camera error:', error);
+            }
+        });
+
+        // Capture and analyze
+        captureBtn.addEventListener('click', async () => {
+            await captureAndAnalyze();
+        });
+
+        // Voice button
+        voiceBtn.addEventListener('click', () => {
+            if (!recognition) {
+                status.textContent = 'Voice not supported on this browser';
+                return;
+            }
+
+            try {
+                voiceBtn.classList.add('recording');
+                voiceBtn.textContent = '🔴 Listening...';
+                status.textContent = 'Listening for command...';
+                recognition.start();
+            } catch (error) {
+                console.error('Recognition start error:', error);
+                voiceBtn.classList.remove('recording');
+                voiceBtn.textContent = '🎤 Voice Command';
+            }
+        });
+
+        async function captureAndAnalyze(prompt = null) {
+            if (analyzing) return;
+
+            try {
+                analyzing = true;
+                captureBtn.disabled = true;
+                voiceBtn.disabled = true;
+                status.innerHTML = '<span class="loading"></span> Capturing and analyzing...';
+
+                // Capture frame
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0);
+
+                const blob = await new Promise(resolve => {
+                    canvas.toBlob(resolve, 'image/jpeg', 0.9);
+                });
+
+                // Upload to backend
+                const formData = new FormData();
+                formData.append('file', blob, 'camera_capture.jpg');
+
+                status.innerHTML = '<span class="loading"></span> AI analyzing...';
+
+                const response = await fetch(`${API_URL}/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // Display results
+                displayResults(data.analysis);
+
+                // Speak results
+                speakResults(data.analysis);
+
+                status.textContent = '✓ Analysis complete!';
+
+            } catch (error) {
+                status.textContent = 'Error: ' + error.message;
+                console.error('Analysis error:', error);
+            } finally {
+                analyzing = false;
+                captureBtn.disabled = false;
+                voiceBtn.disabled = false;
+            }
+        }
+
+        async function processVoiceCommand(command) {
+            const lowerCommand = command.toLowerCase();
+
+            if (lowerCommand.includes('analyze') || lowerCommand.includes('what is this') ||
+                lowerCommand.includes('identify') || lowerCommand.includes('scan')) {
+                await captureAndAnalyze();
+            }
+            else if (lowerCommand.includes('hello') || lowerCommand.includes('hi')) {
+                speak('Hello! I am your AI vision assistant. Point the camera at something and say analyze.');
+            }
+            else if (lowerCommand.includes('help')) {
+                speak('You can say: Analyze this scene, What is this, Identify object, or Scan this.');
+            }
+            else {
+                speak('I can analyze what you see. Say analyze or what is this to identify objects.');
+            }
+        }
+
+        function speak(text) {
+            if (!synth) return;
+
+            // Cancel any ongoing speech
+            synth.cancel();
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+
+            synth.speak(utterance);
+        }
+
+        function speakResults(analysis) {
+            if (!analysis || !synth) return;
+
+            let spokenText = '';
+
+            if (analysis.object_name) {
+                spokenText = `I see a ${analysis.object_name}. `;
+            }
+
+            if (analysis.category) {
+                spokenText += `It's a ${analysis.category}. `;
+            }
+
+            if (analysis.parts && analysis.parts.length > 0) {
+                spokenText += `It has ${analysis.parts.length} main components.`;
+            }
+
+            if (spokenText) {
+                speak(spokenText);
+            }
+        }
+
+        function displayResults(analysis) {
+            if (!analysis) return;
+
+            results.style.display = 'block';
+            results.innerHTML = `
+                <div class="result-item">
+                    <div class="result-title">${analysis.object_name || 'Unknown'}</div>
+                    <div class="result-category">Category: ${analysis.category || 'N/A'}</div>
+                    <div class="result-description">${analysis.description || ''}</div>
+                </div>
+            `;
+
+            if (analysis.parts && analysis.parts.length > 0) {
+                results.innerHTML += '<div class="result-title" style="margin-top: 20px;">Parts:</div>';
+                analysis.parts.slice(0, 5).forEach(part => {
+                    results.innerHTML += `
+                        <div class="result-item">
+                            <strong>${part.name}</strong><br>
+                            ${part.function || ''}
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        // Test connection
+        fetch(`${API_URL}/`)
+            .then(r => r.json())
+            .then(data => {
+                console.log('✓ Backend connected:', data.model);
+            })
+            .catch(err => {
+                status.textContent = '⚠️ Cannot connect to backend';
+                console.error('Backend error:', err);
+            });
+    </script>
+</body>
+</html>

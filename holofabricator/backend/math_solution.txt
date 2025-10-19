@@ -1,0 +1,25 @@
+Here are the step-by-step solutions:
+
+---
+
+**1. Solve: (2x + 3)(x - 4) = ?**
+
+*   **Distribute (FOIL method):** Multiply each term in the first parenthesis by each term in the second.
+    *   (2x)(x) = 2x²
+    *   (2x)(-4) = -8x
+    *   (3)(x) = 3x
+    *   (3)(-4) = -12
+*   **Combine like terms:**
+    2x² - 8x + 3x - 12
+    **Answer:** 2x² - 5x - 12
+
+---
+
+**2. Find x: 3x + 7 = 22**
+
+*   **Isolate the term with x:** Subtract 7 from both sides of the equation.
+    3x + 7 - 7 = 22 - 7
+    3x = 15
+*   **Solve for x:** Divide both sides by 3.
+    3x / 3 = 15 / 3
+    **Answer:** x = 5
