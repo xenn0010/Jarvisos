@@ -70,12 +70,12 @@ app.mount("/app", StaticFiles(directory=str(WEBXR_DIR), html=True), name="webxr"
 
 executor = ThreadPoolExecutor(max_workers=3)
 
-# Gemini
+# Gemini - USING FLASH FOR SPEED (3-5s vs 30-45s)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-2.5-pro')
-    print("[OK] Gemini 2.5 Pro configured")
+    model = genai.GenerativeModel('gemini-2.0-flash-exp')
+    print("[OK] Gemini 2.0 Flash configured (FAST MODE)")
 else:
     print("[WARNING] GEMINI_API_KEY not set")
     model = None
