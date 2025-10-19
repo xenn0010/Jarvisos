@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HoloFabricator - AI Object Scanner</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            color: white;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 350px 1fr 400px;
+            height: 100vh;
+            gap: 0;
+        }
+
+        /* Left Panel - Upload & Controls */
+        .left-panel {
+            background: rgba(0, 0, 0, 0.8);
+            border-right: 2px solid #00f7ff;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00f7ff;
+            text-shadow: 0 0 10px #00f7ff;
+            margin-bottom: 20px;
+        }
+
+        .upload-zone {
+            border: 2px dashed #00f7ff;
+            border-radius: 10px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+
+        .upload-zone:hover {
+            background: rgba(0, 247, 255, 0.1);
+            border-color: #00ccff;
+        }
+
+        .upload-zone.dragging {
+            background: rgba(0, 247, 255, 0.2);
+            border-color: #00ff00;
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #00f7ff 0%, #0066ff 100%);
+            border: none;
+            padding: 12px 24px;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            margin: 10px 0;
+            box-shadow: 0 4px 15px rgba(0, 247, 255, 0.4);
+            transition: all 0.3s;
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 247, 255, 0.6);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status {
+            padding: 15px;
+            background: rgba(0, 247, 255, 0.1);
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 3px solid #00f7ff;
+        }
+
+        .status.processing {
+            border-left-color: #ffaa00;
+        }
+
+        .status.success {
+            border-left-color: #00ff00;
+        }
+
+        .status.error {
+            border-left-color: #ff0000;
+        }
+
+        /* Center Panel - 3D Viewer */
+        .center-panel {
+            position: relative;
+            background: #0a0a0a;
+        }
+
+        #scene-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        .view-controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #00f7ff;
+        }
+
+        .view-controls button {
+            background: rgba(0, 247, 255, 0.2);
+            border: 1px solid #00f7ff;
+            color: white;
+            padding: 8px 16px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .view-controls button:hover {
+            background: rgba(0, 247, 255, 0.4);
+        }
+
+        /* Right Panel - Analysis & Chat */
+        .right-panel {
+            background: rgba(0, 0, 0, 0.8);
+            border-left: 2px solid #00f7ff;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .analysis-section {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .analysis-section h3 {
+            color: #00f7ff;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .part-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 8px;
+            border-left: 3px solid #00f7ff;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .part-item:hover {
+            background: rgba(0, 247, 255, 0.1);
+            transform: translateX(5px);
+        }
+
+        .part-item.highlighted {
+            border-left-color: #00ff00;
+            background: rgba(0, 255, 0, 0.1);
+        }
+
+        .chat-section {
+            border-top: 2px solid #00f7ff;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.9);
+        }
+
+        #chat-input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid #00f7ff;
+            border-radius: 5px;
+            color: white;
+            font-size: 14px;
+            resize: none;
+        }
+
+        #chat-input:focus {
+            outline: none;
+            border-color: #00ccff;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .chat-response {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(0, 247, 255, 0.1);
+            border-radius: 8px;
+            border-left: 3px solid #00f7ff;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #00f7ff;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .metric-label {
+            color: #999;
+            font-size: 13px;
+        }
+
+        .metric-value {
+            color: #00f7ff;
+            font-weight: bold;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Left Panel -->
+        <div class="left-panel">
+            <div class="logo">🔧 HoloFabricator</div>
+            <p style="font-size: 13px; color: #999; margin-bottom: 20px;">AI-Powered Object Scanner</p>
+
+            <div class="upload-zone" id="upload-zone">
+                <div style="font-size: 48px; margin-bottom: 10px;">📸</div>
+                <div style="font-size: 16px; margin-bottom: 10px;">Drop 2D image OR 3D scan</div>
+                <div style="font-size: 12px; color: #999;">Quest 3 scans (.glb, .obj, .ply) or images (.jpg, .png)</div>
+            </div>
+            <input type="file" id="file-input" accept="image/*,.glb,.obj,.ply,.stl,.fbx">
+
+            <button class="btn" id="sample-btn">📦 Load Sample Object</button>
+
+            <div id="status-container"></div>
+
+            <div id="scan-info" style="margin-top: 20px; display: none;">
+                <h3 style="color: #00f7ff; margin-bottom: 15px;">Scan Info</h3>
+                <div class="metric">
+                    <span class="metric-label">Confidence:</span>
+                    <span class="metric-value" id="confidence">-</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Upload Type:</span>
+                    <span class="metric-value" id="upload-type">-</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Category:</span>
+                    <span class="metric-value" id="category">-</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Materials:</span>
+                    <span class="metric-value" id="materials">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Panel -->
+        <div class="center-panel">
+            <div id="scene-container"></div>
+            <div class="view-controls">
+                <button id="explode-btn">💥 Explode</button>
+                <button id="assemble-btn">🔧 Assemble</button>
+                <button id="rotate-btn">🔄 Rotate</button>
+                <button id="reset-btn">↺ Reset View</button>
+            </div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="right-panel">
+            <div class="analysis-section" id="analysis-section">
+                <h3>Object Analysis</h3>
+                <p style="color: #999; font-size: 13px;">Upload an image to start analysis...</p>
+            </div>
+
+            <div class="chat-section">
+                <h3 style="color: #00f7ff; margin-bottom: 10px; font-size: 16px;">Ask Gemini</h3>
+                <textarea
+                    id="chat-input"
+                    rows="3"
+                    placeholder="Ask about the object... (e.g., 'How does this work?' or 'What's broken?')"
+                ></textarea>
+                <button class="btn" id="chat-btn" style="margin-top: 10px;">💬 Ask Question</button>
+                <div id="chat-response"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+
+        const API_URL = 'http://localhost:8000';
+        let currentScanId = null;
+        let currentMesh = null;
+        let parts = [];
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a0a);
+
+        const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+        camera.position.set(2, 2, 4);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        const container = document.getElementById('scene-container');
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        const spotLight = new THREE.SpotLight(0x00f7ff, 1);
+        spotLight.position.set(5, 10, 5);
+        scene.add(spotLight);
+
+        const gridHelper = new THREE.GridHelper(10, 10, 0x00f7ff, 0x003366);
+        gridHelper.material.opacity = 0.2;
+        gridHelper.material.transparent = true;
+        scene.add(gridHelper);
+
+        // Animation
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        });
+
+        // Upload handling
+        const uploadZone = document.getElementById('upload-zone');
+        const fileInput = document.getElementById('file-input');
+
+        uploadZone.addEventListener('click', () => fileInput.click());
+
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragging');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragging');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragging');
+            const file = e.dataTransfer.files[0];
+            if (file) uploadFile(file);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) uploadFile(file);
+        });
+
+        async function uploadFile(file) {
+            showStatus('Uploading and analyzing...', 'processing');
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch(`${API_URL}/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) throw new Error(await response.text());
+
+                const data = await response.json();
+                currentScanId = data.scan_id;
+
+                // Check upload type
+                const uploadType = data.upload_type || data.analysis.upload_type || 'image';
+                const uploadBadge = uploadType === '3d_file' ? '📦 3D Scan' : '📸 2D Image';
+
+                showStatus(`${uploadBadge} - Analysis complete: ${data.analysis.object_name}`, 'success');
+                displayAnalysis(data.analysis);
+
+                // Handle mesh based on upload type
+                if (uploadType === '3d_file') {
+                    // 3D file uploaded - mesh ready immediately!
+                    if (data.mesh_file || data.analysis.mesh_file) {
+                        const meshUrl = data.mesh_file || data.analysis.mesh_file;
+                        loadMesh(meshUrl, meshUrl.split('.').pop());
+                    }
+                } else {
+                    // 2D image - need to generate mesh
+                    if (data.analysis.mesh_status === 'processing') {
+                        showStatus(`${uploadBadge} - ${data.analysis.object_name} - Generating 3D mesh...`, 'processing');
+                        pollMeshStatus(data.scan_id);
+                    } else if (data.analysis.mesh_file) {
+                        loadMesh(data.analysis.mesh_file, 'ply');
+                    }
+                }
+
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+
+        async function pollMeshStatus(scanId) {
+            let attempts = 0;
+            const maxAttempts = 60; // 2 minutes max (60 * 2 seconds)
+
+            const pollInterval = setInterval(async () => {
+                attempts++;
+
+                try {
+                    const response = await fetch(`${API_URL}/analyze/${scanId}`);
+                    if (!response.ok) throw new Error('Polling failed');
+
+                    const data = await response.json();
+
+                    if (data.mesh_status === 'ready') {
+                        clearInterval(pollInterval);
+                        showStatus('3D mesh ready!', 'success');
+                        if (data.mesh_file) {
+                            const fileExt = data.mesh_file.split('.').pop();
+                            loadMesh(data.mesh_file, fileExt);
+                        }
+                    } else if (data.mesh_status === 'failed') {
+                        clearInterval(pollInterval);
+                        showStatus('3D mesh generation failed (using 2D view)', 'error');
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+                        showStatus('Mesh generation timeout (may still complete)', 'error');
+                    } else {
+                        // Still processing - update status
+                        showStatus(`Generating 3D mesh... (${attempts * 2}s)`, 'processing');
+                    }
+
+                } catch (error) {
+                    console.error('Polling error:', error);
+                    if (attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+                        showStatus('Could not check mesh status', 'error');
+                    }
+                }
+            }, 2000); // Poll every 2 seconds
+        }
+
+        function showStatus(message, type = '') {
+            const statusContainer = document.getElementById('status-container');
+            statusContainer.innerHTML = `
+                <div class="status ${type}">
+                    ${type === 'processing' ? '<span class="loading"></span>' : ''}
+                    ${message}
+                </div>
+            `;
+        }
+
+        function displayAnalysis(analysis) {
+            document.getElementById('scan-info').style.display = 'block';
+            document.getElementById('confidence').textContent = `${(analysis.confidence * 100).toFixed(1)}%`;
+
+            const uploadType = analysis.upload_type || 'image';
+            const uploadTypeBadge = uploadType === '3d_file' ? '📦 3D Scan' : '📸 2D Image';
+            document.getElementById('upload-type').textContent = uploadTypeBadge;
+
+            document.getElementById('category').textContent = analysis.category;
+            document.getElementById('materials').textContent = analysis.materials.join(', ');
+
+            const analysisSection = document.getElementById('analysis-section');
+            analysisSection.innerHTML = `
+                <h3>${analysis.object_name}</h3>
+                <p style="color: #999; font-size: 13px; margin-bottom: 20px;">${analysis.description}</p>
+
+                <h4 style="color: #00f7ff; margin: 20px 0 10px 0; font-size: 14px;">Identified Parts (${analysis.parts.length})</h4>
+                ${analysis.parts.map((part, i) => `
+                    <div class="part-item" data-part="${i}">
+                        <div style="font-weight: bold; margin-bottom: 5px;">${part.name}</div>
+                        <div style="font-size: 12px; color: #999;">${part.function}</div>
+                        <div style="font-size: 11px; color: #666; margin-top: 3px;">
+                            📍 ${part.location} • 🔧 ${part.material}
+                        </div>
+                    </div>
+                `).join('')}
+            `;
+
+            // Add click handlers to parts
+            document.querySelectorAll('.part-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    document.querySelectorAll('.part-item').forEach(p => p.classList.remove('highlighted'));
+                    item.classList.add('highlighted');
+                });
+            });
+        }
+
+        function loadMesh(meshUrl, fileExt = 'ply') {
+            if (currentMesh) scene.remove(currentMesh);
+
+            const fullUrl = `${API_URL}${meshUrl}`;
+            console.log(`Loading mesh: ${fullUrl} (type: ${fileExt})`);
+
+            if (fileExt === 'glb' || fileExt === 'gltf') {
+                // GLB/GLTF loader for Quest 3 scans
+                const loader = new GLTFLoader();
+                loader.load(fullUrl, (gltf) => {
+                    currentMesh = gltf.scene;
+
+                    // Center and scale the model
+                    const box = new THREE.Box3().setFromObject(currentMesh);
+                    const center = box.getCenter(new THREE.Vector3());
+                    const size = box.getSize(new THREE.Vector3());
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    const scale = 3 / maxDim; // Scale to fit in 3 unit cube
+
+                    currentMesh.position.sub(center);
+                    currentMesh.scale.setScalar(scale);
+
+                    scene.add(currentMesh);
+                    showStatus('3D Quest scan loaded successfully', 'success');
+                }, undefined, (error) => {
+                    console.error('Error loading GLB:', error);
+                    showStatus('Could not load 3D model', 'error');
+                });
+
+            } else if (fileExt === 'obj') {
+                // OBJ loader
+                const loader = new OBJLoader();
+                loader.load(fullUrl, (object) => {
+                    currentMesh = object;
+
+                    // Center and scale
+                    const box = new THREE.Box3().setFromObject(currentMesh);
+                    const center = box.getCenter(new THREE.Vector3());
+                    const size = box.getSize(new THREE.Vector3());
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    const scale = 3 / maxDim;
+
+                    currentMesh.position.sub(center);
+                    currentMesh.scale.setScalar(scale);
+
+                    scene.add(currentMesh);
+                    showStatus('3D OBJ model loaded successfully', 'success');
+                }, undefined, (error) => {
+                    console.error('Error loading OBJ:', error);
+                    showStatus('Could not load 3D model', 'error');
+                });
+
+            } else {
+                // PLY loader (default for generated meshes)
+                const loader = new PLYLoader();
+                loader.load(fullUrl, (geometry) => {
+                    const material = new THREE.MeshStandardMaterial({
+                        vertexColors: true,
+                        metalness: 0.3,
+                        roughness: 0.7
+                    });
+
+                    currentMesh = new THREE.Mesh(geometry, material);
+                    currentMesh.scale.set(10, 10, 10);
+                    scene.add(currentMesh);
+
+                    showStatus('3D model loaded successfully', 'success');
+                }, undefined, (error) => {
+                    console.error('Error loading PLY:', error);
+                    showStatus('Could not load 3D model', 'error');
+                });
+            }
+        }
+
+        // Chat functionality
+        document.getElementById('chat-btn').addEventListener('click', async () => {
+            if (!currentScanId) {
+                alert('Please scan an object first');
+                return;
+            }
+
+            const question = document.getElementById('chat-input').value.trim();
+            if (!question) return;
+
+            const chatResponse = document.getElementById('chat-response');
+            chatResponse.innerHTML = '<span class="loading"></span> Asking Gemini...';
+
+            try {
+                const response = await fetch(`${API_URL}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        scan_id: currentScanId,
+                        question: question
+                    })
+                });
+
+                if (!response.ok) throw new Error(await response.text());
+
+                const data = await response.json();
+                chatResponse.innerHTML = `
+                    <div class="chat-response">
+                        <strong>Gemini:</strong><br>
+                        ${data.answer}
+                    </div>
+                `;
+
+                // Highlight relevant parts
+                if (data.highlighted_parts.length > 0) {
+                    document.querySelectorAll('.part-item').forEach(item => {
+                        item.classList.remove('highlighted');
+                        const partName = item.querySelector('div').textContent;
+                        if (data.highlighted_parts.some(p => partName.includes(p))) {
+                            item.classList.add('highlighted');
+                        }
+                    });
+                }
+
+            } catch (error) {
+                chatResponse.innerHTML = `<div class="chat-response" style="border-left-color: #ff0000;">Error: ${error.message}</div>`;
+            }
+        });
+
+        console.log('🚀 HoloFabricator Scanner Ready!');
+        console.log('💡 Upload an image to start scanning');
+    </script>
+</body>
+</html>

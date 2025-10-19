@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HoloFabricator - Tony Stark Workshop</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Courier New', monospace;
+            background: black;
+            color: #00f7ff;
+            overflow: hidden;
+        }
+
+        #ar-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .stark-hud {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 20, 40, 0.95);
+            padding: 20px;
+            border: 2px solid #00f7ff;
+            border-radius: 10px;
+            box-shadow: 0 0 40px rgba(0, 247, 255, 0.8), inset 0 0 20px rgba(0, 247, 255, 0.2);
+            max-width: 400px;
+            z-index: 1000;
+            animation: hudPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes hudPulse {
+            0%, 100% { box-shadow: 0 0 40px rgba(0, 247, 255, 0.8), inset 0 0 20px rgba(0, 247, 255, 0.2); }
+            50% { box-shadow: 0 0 60px rgba(0, 247, 255, 1), inset 0 0 30px rgba(0, 247, 255, 0.4); }
+        }
+
+        .stark-hud h1 {
+            color: #00f7ff;
+            font-size: 24px;
+            text-shadow: 0 0 20px #00f7ff;
+            margin-bottom: 15px;
+            letter-spacing: 2px;
+        }
+
+        .status {
+            font-size: 14px;
+            padding: 12px;
+            background: rgba(0, 247, 255, 0.1);
+            border-left: 3px solid #00f7ff;
+            margin: 10px 0;
+            animation: statusFlicker 0.1s infinite;
+        }
+
+        @keyframes statusFlicker {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.95; }
+        }
+
+        .parts-panel {
+            position: fixed;
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            background: rgba(0, 20, 40, 0.95);
+            padding: 20px;
+            border: 2px solid #00f7ff;
+            border-radius: 10px;
+            max-width: 350px;
+            max-height: 70vh;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 0 40px rgba(0, 247, 255, 0.8);
+            display: none;
+        }
+
+        .part-card {
+            background: rgba(0, 247, 255, 0.1);
+            border: 1px solid #00f7ff;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .part-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 247, 255, 0.3), transparent);
+            transition: left 0.5s;
+        }
+
+        .part-card:hover::before {
+            left: 100%;
+        }
+
+        .part-card:hover {
+            background: rgba(0, 247, 255, 0.3);
+            transform: translateX(-10px);
+            box-shadow: 0 0 20px rgba(0, 247, 255, 0.6);
+        }
+
+        .part-card.active {
+            border-color: #ff00ff;
+            background: rgba(255, 0, 255, 0.2);
+            box-shadow: 0 0 30px rgba(255, 0, 255, 0.8);
+        }
+
+        #start-ar-btn {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #00f7ff 0%, #0066ff 100%);
+            border: 3px solid #00f7ff;
+            padding: 30px 60px;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            border-radius: 15px;
+            cursor: pointer;
+            box-shadow: 0 10px 50px rgba(0, 247, 255, 0.8);
+            z-index: 2000;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            animation: startPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes startPulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.05); }
+        }
+
+        #start-ar-btn:hover {
+            box-shadow: 0 15px 70px rgba(0, 247, 255, 1);
+        }
+
+        .gesture-hint {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 20, 40, 0.95);
+            padding: 20px 40px;
+            border: 2px solid #00f7ff;
+            border-radius: 20px;
+            font-size: 16px;
+            text-align: center;
+            z-index: 1000;
+            box-shadow: 0 0 30px rgba(0, 247, 255, 0.6);
+        }
+
+        .scan-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 999;
+            background: linear-gradient(180deg, transparent 0%, rgba(0, 247, 255, 0.1) 50%, transparent 100%);
+            background-size: 100% 200%;
+            animation: scanLine 2s linear infinite;
+            opacity: 0;
+        }
+
+        .scan-overlay.active {
+            opacity: 1;
+        }
+
+        @keyframes scanLine {
+            0% { background-position: 0% 0%; }
+            100% { background-position: 0% 100%; }
+        }
+
+        .hologram-info {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 20, 40, 0.95);
+            padding: 15px 30px;
+            border: 2px solid #ff00ff;
+            border-radius: 10px;
+            font-size: 18px;
+            text-align: center;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 0 40px rgba(255, 0, 255, 0.8);
+        }
+
+        .loading-ring {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0, 247, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #00f7ff;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Floating label in 3D space */
+        .floating-label {
+            position: absolute;
+            background: rgba(0, 247, 255, 0.9);
+            color: black;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            pointer-events: none;
+            border: 2px solid #00ffff;
+            box-shadow: 0 0 30px rgba(0, 247, 255, 1);
+            white-space: nowrap;
+            font-family: 'Courier New', monospace;
+            animation: labelFloat 2s ease-in-out infinite;
+        }
+
+        @keyframes labelFloat {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30px;
+            height: 30px;
+            border: 2px solid #00f7ff;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0.5;
+        }
+
+        .crosshair::before, .crosshair::after {
+            content: '';
+            position: absolute;
+            background: #00f7ff;
+        }
+
+        .crosshair::before {
+            width: 2px;
+            height: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .crosshair::after {
+            width: 100%;
+            height: 2px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+    </style>
+</head>
+<body>
+    <div id="ar-container"></div>
+    <div class="scan-overlay" id="scan-overlay"></div>
+    <div class="crosshair"></div>
+
+    <button id="start-ar-btn">🔧 ENTER WORKSHOP</button>
+
+    <div class="stark-hud" style="display: none;" id="hud">
+        <h1>⚡ HOLOFABRICATOR</h1>
+        <div id="status-display" class="status">
+            System initializing...
+        </div>
+    </div>
+
+    <div class="parts-panel" id="parts-panel">
+        <h3 style="color: #00f7ff; margin-bottom: 15px; font-size: 20px;">📋 COMPONENTS</h3>
+        <div id="parts-list"></div>
+    </div>
+
+    <div class="gesture-hint" style="display: none;" id="gesture-hint">
+        🎮 TRIGGER: Scan | 👋 PINCH: Grab | ✋ SPREAD: Rotate | 🗣️ "EXPLODE": Disassemble
+    </div>
+
+    <div class="hologram-info" id="hologram-info"></div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
+
+        const API_URL = 'http://localhost:8000';
+
+        let xrSession = null;
+        let scene, camera, renderer, xrRefSpace;
+        let hologramMesh = null;
+        let hologramGroup = new THREE.Group();
+        let floatingLabels = [];
+        let isExploded = false;
+        let currentScanId = null;
+        let currentAnalysis = null;
+        let handPose = { left: null, right: null };
+
+        // UI
+        const startBtn = document.getElementById('start-ar-btn');
+        const hud = document.getElementById('hud');
+        const statusDisplay = document.getElementById('status-display');
+        const gestureHint = document.getElementById('gesture-hint');
+        const partsPanel = document.getElementById('parts-panel');
+        const hologramInfo = document.getElementById('hologram-info');
+        const scanOverlay = document.getElementById('scan-overlay');
+
+        // Setup Three.js scene
+        function setupScene() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100);
+
+            renderer = new THREE.WebGLRenderer({
+                antialias: true,
+                alpha: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true;
+            document.getElementById('ar-container').appendChild(renderer.domElement);
+
+            // Ambient lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+            scene.add(ambientLight);
+
+            // Directional light
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+            dirLight.position.set(3, 10, 10);
+            scene.add(dirLight);
+
+            console.log('✅ Scene initialized');
+        }
+
+        // Create holographic shader material
+        function createHologramMaterial() {
+            return new THREE.ShaderMaterial({
+                uniforms: {
+                    time: { value: 0 },
+                    color: { value: new THREE.Color(0x00f7ff) }
+                },
+                vertexShader: `
+                    varying vec3 vNormal;
+                    varying vec3 vPosition;
+
+                    void main() {
+                        vNormal = normalize(normalMatrix * normal);
+                        vPosition = position;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform float time;
+                    uniform vec3 color;
+                    varying vec3 vNormal;
+                    varying vec3 vPosition;
+
+                    void main() {
+                        // Fresnel effect (edge glow)
+                        float fresnel = pow(1.0 - abs(dot(vNormal, vec3(0.0, 0.0, 1.0))), 2.0);
+
+                        // Scan lines
+                        float scanLine = sin(vPosition.y * 20.0 + time * 2.0) * 0.5 + 0.5;
+
+                        // Combine effects
+                        vec3 finalColor = color * (fresnel * 1.5 + scanLine * 0.3);
+                        float alpha = fresnel * 0.8 + 0.3;
+
+                        gl_FragColor = vec4(finalColor, alpha);
+                    }
+                `,
+                transparent: true,
+                side: THREE.DoubleSide,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+        }
+
+        // Start AR session
+        startBtn.addEventListener('click', async () => {
+            if (!navigator.xr) {
+                alert('❌ WebXR not supported');
+                return;
+            }
+
+            try {
+                const supported = await navigator.xr.isSessionSupported('immersive-ar');
+                if (!supported) {
+                    alert('❌ AR not supported on this device');
+                    return;
+                }
+
+                setupScene();
+
+                xrSession = await navigator.xr.requestSession('immersive-ar', {
+                    requiredFeatures: ['local-floor'],
+                    optionalFeatures: [
+                        'mesh-detection',
+                        'hand-tracking',
+                        'hit-test',
+                        'anchors'
+                    ]
+                });
+
+                await renderer.xr.setSession(xrSession);
+                xrRefSpace = await xrSession.requestReferenceSpace('local-floor');
+
+                startBtn.style.display = 'none';
+                hud.style.display = 'block';
+                gestureHint.style.display = 'block';
+
+                updateStatus('⚡ WORKSHOP ACTIVE - READY TO SCAN', 'success');
+                console.log('✅ AR Session started');
+
+                setupControllers();
+                setupVoiceCommands();
+
+                renderer.setAnimationLoop(renderAR);
+
+            } catch (error) {
+                console.error('❌ AR start failed:', error);
+                alert(`Failed to start AR: ${error.message}\n\nMake sure:\n1. You're on Quest 3\n2. Camera permissions granted\n3. Room is scanned`);
+            }
+        });
+
+        // Setup controllers
+        function setupControllers() {
+            let wasTriggerPressed = false;
+
+            window.checkControllers = (frame) => {
+                if (!xrSession) return;
+
+                for (const source of xrSession.inputSources) {
+                    if (source.gamepad) {
+                        const gamepad = source.gamepad;
+
+                        // Trigger: Scan
+                        if (gamepad.buttons[0] && gamepad.buttons[0].pressed) {
+                            if (!wasTriggerPressed) {
+                                wasTriggerPressed = true;
+                                scanAndLoadHologram(frame);
+                            }
+                        } else {
+                            wasTriggerPressed = false;
+                        }
+
+                        // Thumbstick: Rotate hologram
+                        if (hologramGroup && gamepad.axes && gamepad.axes.length >= 2) {
+                            const x = gamepad.axes[0];
+                            const y = gamepad.axes[1];
+                            if (Math.abs(x) > 0.2 || Math.abs(y) > 0.2) {
+                                hologramGroup.rotation.y += x * 0.02;
+                                hologramGroup.rotation.x += y * 0.02;
+                            }
+                        }
+                    }
+                }
+            };
+        }
+
+        // Voice commands
+        function setupVoiceCommands() {
+            if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+                console.warn('⚠️ Voice recognition not supported');
+                return;
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = false;
+
+            recognition.onresult = (event) => {
+                const last = event.results.length - 1;
+                const command = event.results[last][0].transcript.toLowerCase().trim();
+                console.log('🎤 Voice:', command);
+
+                if (command.includes('scan') || command.includes('analyze')) {
+                    scanAndLoadHologram();
+                } else if (command.includes('explode') || command.includes('disassemble')) {
+                    toggleExplodedView();
+                } else if (command.includes('rotate')) {
+                    animateRotation();
+                } else if (command.includes('reset')) {
+                    resetHologram();
+                }
+            };
+
+            try {
+                recognition.start();
+            } catch (e) {
+                console.warn('⚠️ Voice recognition failed:', e);
+            }
+        }
+
+        // Scan and load hologram
+        async function scanAndLoadHologram(frame) {
+            updateStatus('🔍 SCANNING ENVIRONMENT...', 'scanning');
+            scanOverlay.classList.add('active');
+
+            if (!frame) {
+                console.warn('⚠️ No frame available');
+                scanOverlay.classList.remove('active');
+                return;
+            }
+
+            try {
+                const meshes = frame.detectedMeshes;
+
+                if (!meshes || meshes.size === 0) {
+                    updateStatus('❌ NO MESH DATA - SCAN ROOM IN SPACE SETUP', 'error');
+                    scanOverlay.classList.remove('active');
+                    return;
+                }
+
+                console.log(`✅ Found ${meshes.size} meshes`);
+
+                // Find object mesh
+                let targetMesh = null;
+                for (const [id, mesh] of meshes) {
+                    const label = mesh.semanticLabel || 'unknown';
+                    if (label !== 'global mesh' && label !== 'wall' && label !== 'floor' && label !== 'ceiling') {
+                        targetMesh = mesh;
+                        break;
+                    }
+                }
+
+                if (!targetMesh && meshes.size > 0) {
+                    targetMesh = Array.from(meshes.values())[0];
+                }
+
+                if (!targetMesh) {
+                    updateStatus('❌ NO SUITABLE OBJECT FOUND', 'error');
+                    scanOverlay.classList.remove('active');
+                    return;
+                }
+
+                updateStatus('📤 UPLOADING MESH DATA...', 'scanning');
+
+                // Upload mesh
+                const vertices = Array.from(targetMesh.vertices);
+                const indices = Array.from(targetMesh.indices);
+
+                const response = await fetch(`${API_URL}/upload-webxr-mesh`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        vertices: vertices,
+                        indices: indices,
+                        semantic_label: targetMesh.semanticLabel || 'detected object'
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Upload failed: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                currentScanId = data.scan_id;
+                currentAnalysis = data.analysis;
+
+                updateStatus('🧠 GEMINI ANALYSIS COMPLETE', 'success');
+                scanOverlay.classList.remove('active');
+
+                // Load and display hologram
+                await loadHologram(data.mesh_file, targetMesh.meshSpace, frame);
+
+                // Show info
+                displayAnalysis(currentAnalysis);
+                speak(`Hologram loaded. ${currentAnalysis.object_name} identified.`);
+
+            } catch (error) {
+                console.error('❌ Scan error:', error);
+                updateStatus(`❌ SCAN FAILED: ${error.message}`, 'error');
+                scanOverlay.classList.remove('active');
+            }
+        }
+
+        // Load hologram mesh
+        async function loadHologram(meshUrl, meshSpace, frame) {
+            updateStatus('📦 LOADING HOLOGRAM...', 'scanning');
+
+            // Clear existing hologram
+            if (hologramMesh) {
+                hologramGroup.remove(hologramMesh);
+            }
+            floatingLabels.forEach(label => document.body.removeChild(label));
+            floatingLabels = [];
+
+            const loader = new PLYLoader();
+
+            return new Promise((resolve, reject) => {
+                loader.load(meshUrl, (geometry) => {
+                    geometry.computeVertexNormals();
+                    geometry.center();
+
+                    // Create holographic material
+                    const material = createHologramMaterial();
+
+                    hologramMesh = new THREE.Mesh(geometry, material);
+
+                    // Scale to reasonable size
+                    const bbox = new THREE.Box3().setFromObject(hologramMesh);
+                    const size = bbox.getSize(new THREE.Vector3());
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    const scale = 0.3 / maxDim; // 30cm max
+                    hologramMesh.scale.setScalar(scale);
+
+                    hologramGroup.add(hologramMesh);
+
+                    // Position hologram in front of user
+                    if (meshSpace && frame) {
+                        const pose = frame.getPose(meshSpace, xrRefSpace);
+                        if (pose) {
+                            const matrix = new THREE.Matrix4().fromArray(pose.transform.matrix);
+                            hologramGroup.position.setFromMatrixPosition(matrix);
+                        } else {
+                            hologramGroup.position.set(0, 1.2, -0.8); // Fallback: in front of user
+                        }
+                    } else {
+                        hologramGroup.position.set(0, 1.2, -0.8);
+                    }
+
+                    scene.add(hologramGroup);
+
+                    // Add wireframe overlay
+                    const wireframe = new THREE.WireframeGeometry(geometry);
+                    const lineMaterial = new THREE.LineBasicMaterial({
+                        color: 0x00f7ff,
+                        transparent: true,
+                        opacity: 0.3
+                    });
+                    const wireframeMesh = new THREE.LineSegments(wireframe, lineMaterial);
+                    wireframeMesh.scale.copy(hologramMesh.scale);
+                    hologramGroup.add(wireframeMesh);
+
+                    updateStatus('✅ HOLOGRAM ACTIVE', 'success');
+                    hologramInfo.style.display = 'block';
+                    hologramInfo.textContent = '✨ HOLOGRAM LOADED - USE GESTURES TO INTERACT';
+
+                    resolve();
+                }, undefined, reject);
+            });
+        }
+
+        // Toggle exploded view
+        function toggleExplodedView() {
+            if (!hologramMesh) return;
+
+            isExploded = !isExploded;
+
+            if (isExploded) {
+                updateStatus('💥 EXPLODED VIEW ACTIVE', 'success');
+                speak('Exploding hologram');
+
+                // Explode effect (split geometry into parts)
+                const geometry = hologramMesh.geometry;
+                const positions = geometry.attributes.position.array;
+
+                // Store original positions if not already stored
+                if (!geometry.userData.originalPositions) {
+                    geometry.userData.originalPositions = positions.slice();
+                }
+
+                // Move vertices outward from center
+                for (let i = 0; i < positions.length; i += 3) {
+                    const x = positions[i];
+                    const y = positions[i + 1];
+                    const z = positions[i + 2];
+
+                    positions[i] = x * 1.5;
+                    positions[i + 1] = y * 1.5;
+                    positions[i + 2] = z * 1.5;
+                }
+
+                geometry.attributes.position.needsUpdate = true;
+
+            } else {
+                updateStatus('🔧 REASSEMBLING...', 'scanning');
+                speak('Reassembling');
+
+                const geometry = hologramMesh.geometry;
+                const original = geometry.userData.originalPositions;
+
+                if (original) {
+                    const positions = geometry.attributes.position.array;
+                    for (let i = 0; i < positions.length; i++) {
+                        positions[i] = original[i];
+                    }
+                    geometry.attributes.position.needsUpdate = true;
+                }
+
+                updateStatus('✅ HOLOGRAM REASSEMBLED', 'success');
+            }
+        }
+
+        // Animate rotation
+        function animateRotation() {
+            if (!hologramGroup) return;
+            speak('Rotating hologram');
+
+            let startTime = Date.now();
+            const duration = 3000; // 3 seconds
+
+            function rotate() {
+                const elapsed = Date.now() - startTime;
+                if (elapsed < duration) {
+                    hologramGroup.rotation.y += 0.02;
+                    requestAnimationFrame(rotate);
+                }
+            }
+            rotate();
+        }
+
+        // Reset hologram
+        function resetHologram() {
+            if (hologramGroup) {
+                hologramGroup.rotation.set(0, 0, 0);
+                hologramGroup.scale.set(1, 1, 1);
+                if (isExploded) toggleExplodedView();
+            }
+            speak('Hologram reset');
+        }
+
+        // Display analysis
+        function displayAnalysis(analysis) {
+            partsPanel.style.display = 'block';
+            const partsList = document.getElementById('parts-list');
+
+            partsList.innerHTML = analysis.parts.map((part, i) => `
+                <div class="part-card" data-part="${i}" onclick="highlightPart(${i})">
+                    <div style="font-weight: bold; font-size: 16px; color: #00f7ff; margin-bottom: 6px;">
+                        ${part.name}
+                    </div>
+                    <div style="font-size: 13px; color: #aaa; margin-bottom: 4px;">
+                        ${part.function}
+                    </div>
+                    <div style="font-size: 11px; color: #888;">
+                        📍 ${part.location} • 🔧 ${part.material}
+                    </div>
+                </div>
+            `).join('');
+
+            console.log('✅ Analysis displayed');
+        }
+
+        // Highlight part
+        window.highlightPart = function(index) {
+            document.querySelectorAll('.part-card').forEach((card, i) => {
+                card.classList.toggle('active', i === index);
+            });
+
+            if (currentAnalysis && currentAnalysis.parts[index]) {
+                const part = currentAnalysis.parts[index];
+                speak(`${part.name}: ${part.function}`);
+            }
+        };
+
+        // Update status
+        function updateStatus(message, type = '') {
+            statusDisplay.textContent = message;
+            if (type === 'scanning') {
+                statusDisplay.innerHTML = `<span class="loading-ring"></span> ${message}`;
+            }
+        }
+
+        // Text-to-speech
+        function speak(text) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.1;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // AR render loop
+        let time = 0;
+        function renderAR(timestamp, frame) {
+            if (!frame) return;
+
+            time += 0.01;
+
+            // Update hologram shader
+            if (hologramMesh && hologramMesh.material.uniforms) {
+                hologramMesh.material.uniforms.time.value = time;
+            }
+
+            // Rotate hologram slowly
+            if (hologramGroup && !isExploded) {
+                hologramGroup.rotation.y += 0.002;
+            }
+
+            // Check controllers
+            if (window.checkControllers) {
+                window.checkControllers(frame);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        console.log('🚀 Tony Stark Workshop Ready!');
+        console.log('💡 Click "ENTER WORKSHOP" to start');
+    </script>
+</body>
+</html>

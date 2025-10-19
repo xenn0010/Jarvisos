@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HoloFabricator - Auto AR Scanner</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: black;
+            color: white;
+            overflow: hidden;
+        }
+
+        #ar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #00f7ff;
+            box-shadow: 0 0 20px rgba(0, 247, 255, 0.5);
+            max-width: 350px;
+        }
+
+        .hud h2 {
+            color: #00f7ff;
+            font-size: 24px;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px #00f7ff;
+        }
+
+        .status {
+            font-size: 14px;
+            margin: 10px 0;
+            padding: 10px;
+            background: rgba(0, 247, 255, 0.1);
+            border-radius: 5px;
+            border-left: 3px solid #00f7ff;
+        }
+
+        .status.scanning {
+            border-left-color: #ffaa00;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .status.success {
+            border-left-color: #00ff00;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .instruction {
+            margin-top: 15px;
+            font-size: 16px;
+            color: #00f7ff;
+            animation: fadeIn 1s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .parts-overlay {
+            position: absolute;
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #00f7ff;
+            max-width: 300px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .part-tag {
+            background: rgba(0, 247, 255, 0.2);
+            border: 1px solid #00f7ff;
+            padding: 8px 12px;
+            margin: 5px 0;
+            border-radius: 5px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .part-tag:hover {
+            background: rgba(0, 247, 255, 0.4);
+            transform: translateX(-5px);
+        }
+
+        .part-tag.highlighted {
+            border-color: #00ff00;
+            background: rgba(0, 255, 0, 0.3);
+        }
+
+        #start-ar-btn {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #00f7ff 0%, #0066ff 100%);
+            border: none;
+            padding: 20px 40px;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0, 247, 255, 0.6);
+            pointer-events: auto;
+        }
+
+        #start-ar-btn:hover {
+            transform: translate(-50%, -50%) scale(1.05);
+        }
+
+        .gesture-hint {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 30px;
+            border-radius: 20px;
+            border: 2px solid #00f7ff;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #00f7ff;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="ar-overlay">
+        <button id="start-ar-btn">🔧 Enter AR Scanner Mode</button>
+
+        <div class="hud" style="display: none;" id="hud">
+            <h2>🔧 HoloFabricator</h2>
+            <div id="status-display" class="status">
+                Ready to scan...
+            </div>
+            <div id="object-info" style="display: none;">
+                <h3 style="color: #00f7ff; margin-top: 15px; font-size: 18px;" id="object-name"></h3>
+                <p style="color: #999; font-size: 13px; margin-top: 5px;" id="object-description"></p>
+            </div>
+        </div>
+
+        <div class="parts-overlay" style="display: none;" id="parts-panel">
+            <h3 style="color: #00f7ff; margin-bottom: 10px; font-size: 16px;">Identified Parts</h3>
+            <div id="parts-list"></div>
+        </div>
+
+        <div class="gesture-hint" style="display: none;" id="gesture-hint">
+            👌 Pinch fingers to scan object
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        const API_URL = 'http://localhost:8000';
+        let xrSession = null;
+        let currentScanId = null;
+        let gl = null;
+        let scene, camera, renderer;
+        let arAnnotations = [];
+
+        // UI elements
+        const startBtn = document.getElementById('start-ar-btn');
+        const hud = document.getElementById('hud');
+        const statusDisplay = document.getElementById('status-display');
+        const gestureHint = document.getElementById('gesture-hint');
+        const partsPanel = document.getElementById('parts-panel');
+        const objectInfo = document.getElementById('object-info');
+
+        // Setup Three.js scene for AR
+        function setupScene() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+
+            renderer = new THREE.WebGLRenderer({
+                antialias: true,
+                alpha: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            // Add some lighting for AR content
+            const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+            scene.add(light);
+        }
+
+        // Start AR Session
+        startBtn.addEventListener('click', async () => {
+            if (!navigator.xr) {
+                alert('WebXR not supported on this device');
+                return;
+            }
+
+            try {
+                // Check if AR is supported
+                const supported = await navigator.xr.isSessionSupported('immersive-ar');
+                if (!supported) {
+                    alert('AR mode not supported on this device');
+                    return;
+                }
+
+                setupScene();
+
+                // Request AR session with camera access
+                xrSession = await navigator.xr.requestSession('immersive-ar', {
+                    requiredFeatures: ['local-floor', 'hand-tracking'],
+                    optionalFeatures: ['camera-access', 'depth-sensing', 'hit-test']
+                });
+
+                await renderer.xr.setSession(xrSession);
+
+                // Hide start button, show HUD
+                startBtn.style.display = 'none';
+                hud.style.display = 'block';
+                gestureHint.style.display = 'block';
+
+                updateStatus('AR Mode Active - Look at object', 'success');
+                console.log('✅ AR Session started successfully');
+
+                // Setup hand tracking for pinch gesture
+                setupHandTracking();
+
+                // Start render loop
+                renderer.setAnimationLoop(renderAR);
+
+            } catch (error) {
+                console.error('Failed to start AR:', error);
+                alert('Could not start AR mode: ' + error.message);
+            }
+        });
+
+        // Hand tracking for pinch gesture
+        function setupHandTracking() {
+            if (!xrSession) return;
+
+            let wasLeftPinching = false;
+            let wasRightPinching = false;
+
+            xrSession.addEventListener('inputsourceschange', (event) => {
+                console.log('Input sources changed:', event);
+            });
+
+            // Monitor for pinch gesture (alternative: use controllers)
+            const checkPinch = (frame) => {
+                const inputSources = xrSession.inputSources;
+
+                for (const source of inputSources) {
+                    if (source.hand) {
+                        // Hand tracking available
+                        const joints = frame.getJointPoses(source.hand, frame.session.inputSources[0].gripSpace);
+
+                        // Check pinch (thumb tip + index tip distance)
+                        // This is simplified - real implementation would calculate distance
+
+                    } else if (source.gamepad) {
+                        // Fallback: Use controller trigger as scan button
+                        const gamepad = source.gamepad;
+
+                        if (gamepad.buttons[0] && gamepad.buttons[0].pressed) {
+                            // Trigger pressed - capture scan!
+                            if (source.handedness === 'right' && !wasRightPinching) {
+                                wasRightPinching = true;
+                                captureAndScan();
+                            }
+                            if (source.handedness === 'left' && !wasLeftPinching) {
+                                wasLeftPinching = true;
+                                captureAndScan();
+                            }
+                        } else {
+                            if (source.handedness === 'right') wasRightPinching = false;
+                            if (source.handedness === 'left') wasLeftPinching = false;
+                        }
+                    }
+                }
+            };
+
+            // Add to animation loop
+            window.checkPinch = checkPinch;
+        }
+
+        // Capture camera frame and send to backend
+        async function captureAndScan() {
+            updateStatus('📸 Capturing scan...', 'scanning');
+            console.log('🎯 Scan triggered!');
+
+            try {
+                // Capture current camera view
+                const canvas = renderer.domElement;
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+
+                // Create form data
+                const formData = new FormData();
+                formData.append('file', blob, 'quest_scan.jpg');
+
+                // Upload to backend
+                updateStatus('🤖 Analyzing with Gemini...', 'scanning');
+
+                const response = await fetch(`${API_URL}/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error('Upload failed');
+                }
+
+                const data = await response.json();
+                currentScanId = data.scan_id;
+
+                // Display results in AR overlay
+                displayARResults(data.analysis);
+                updateStatus(`✅ ${data.analysis.object_name}`, 'success');
+
+            } catch (error) {
+                console.error('Scan failed:', error);
+                updateStatus('❌ Scan failed - try again', 'error');
+            }
+        }
+
+        // Display analysis results as AR overlay
+        function displayARResults(analysis) {
+            // Update HUD
+            document.getElementById('object-name').textContent = analysis.object_name;
+            document.getElementById('object-description').textContent = analysis.description;
+            objectInfo.style.display = 'block';
+
+            // Show parts panel
+            partsPanel.style.display = 'block';
+            const partsList = document.getElementById('parts-list');
+            partsList.innerHTML = analysis.parts.map((part, i) => `
+                <div class="part-tag" data-part="${i}">
+                    <div style="font-weight: bold; margin-bottom: 3px;">${part.name}</div>
+                    <div style="font-size: 11px; color: #999;">${part.location}</div>
+                </div>
+            `).join('');
+
+            // Add click handlers
+            document.querySelectorAll('.part-tag').forEach(tag => {
+                tag.addEventListener('click', () => {
+                    document.querySelectorAll('.part-tag').forEach(t => t.classList.remove('highlighted'));
+                    tag.classList.add('highlighted');
+
+                    // TODO: Highlight part in 3D AR space
+                    const partName = tag.querySelector('div').textContent;
+                    console.log('Selected part:', partName);
+                });
+            });
+
+            console.log('✅ Analysis displayed:', analysis);
+        }
+
+        // Update status display
+        function updateStatus(message, type = '') {
+            statusDisplay.textContent = message;
+            statusDisplay.className = `status ${type}`;
+
+            if (type === 'scanning') {
+                statusDisplay.innerHTML = `<span class="loading-spinner"></span> ${message}`;
+            }
+        }
+
+        // AR render loop
+        function renderAR(time, frame) {
+            if (!frame) return;
+
+            // Check for pinch gesture
+            if (window.checkPinch) {
+                window.checkPinch(frame);
+            }
+
+            // Render scene
+            renderer.render(scene, camera);
+        }
+
+        // Fallback: Add keyboard shortcut for testing in browser
+        document.addEventListener('keydown', (e) => {
+            if (e.key === ' ' || e.key === 'Enter') {
+                console.log('🔘 Scan triggered via keyboard');
+                captureAndScan();
+            }
+        });
+
+        console.log('🚀 HoloFabricator AR Scanner Ready!');
+        console.log('💡 Click "Enter AR Scanner Mode" to start');
+        console.log('🎮 In AR: Pull trigger to scan objects');
+        console.log('⌨️  In browser: Press SPACE to test scan');
+    </script>
+</body>
+</html>

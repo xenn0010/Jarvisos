@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exploded View Demo - HoloFabricator</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Arial', sans-serif;
+            background: #000;
+            color: white;
+            overflow: hidden;
+        }
+
+        #scene-container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #controls {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px 40px;
+            border-radius: 15px;
+            border: 2px solid #00f7ff;
+            z-index: 1000;
+        }
+
+        button {
+            background: linear-gradient(135deg, #00f7ff 0%, #0066ff 100%);
+            border: none;
+            padding: 12px 24px;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 0 10px;
+            box-shadow: 0 4px 15px rgba(0, 247, 255, 0.4);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 247, 255, 0.6);
+        }
+
+        #info {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 3px solid #00f7ff;
+            max-width: 300px;
+        }
+
+        .part-label {
+            position: absolute;
+            background: rgba(0, 247, 255, 0.9);
+            color: #000;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            font-weight: bold;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="scene-container"></div>
+
+    <div id="info">
+        <h2 style="margin: 0 0 10px 0; color: #00f7ff;">Engine Assembly</h2>
+        <p style="margin: 5px 0; font-size: 14px;">Hover over parts for details</p>
+        <p style="margin: 5px 0; font-size: 12px; opacity: 0.7;">Parts: <span id="part-count">0</span></p>
+    </div>
+
+    <div id="controls">
+        <button id="explode-btn">💥 Explode View</button>
+        <button id="assemble-btn">🔧 Assemble</button>
+        <button id="rotate-btn">🔄 Auto Rotate</button>
+        <button id="highlight-btn">✨ Highlight Parts</button>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a0a);
+        scene.fog = new THREE.Fog(0x0a0a0a, 10, 50);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(5, 3, 5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.getElementById('scene-container').appendChild(renderer.domElement);
+
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const spotLight = new THREE.SpotLight(0x00f7ff, 1);
+        spotLight.position.set(10, 20, 10);
+        spotLight.castShadow = true;
+        scene.add(spotLight);
+
+        const pointLight = new THREE.PointLight(0x0066ff, 0.5);
+        pointLight.position.set(-10, 10, -10);
+        scene.add(pointLight);
+
+        // Grid
+        const gridHelper = new THREE.GridHelper(20, 20, 0x00f7ff, 0x003366);
+        gridHelper.material.opacity = 0.2;
+        gridHelper.material.transparent = true;
+        scene.add(gridHelper);
+
+        // Engine Parts Data (simulated - would come from Open3D/OpenYOLO3D)
+        const engineParts = [
+            { name: 'Cylinder Block', color: 0x808080, size: [2, 1.5, 1.5], offset: [0, 0, 0] },
+            { name: 'Cylinder Head', color: 0x909090, size: [1.8, 0.5, 1.4], offset: [0, 0.8, 0] },
+            { name: 'Piston 1', color: 0xff6b6b, size: [0.4, 0.6, 0.4], offset: [-0.6, -0.5, 0.5] },
+            { name: 'Piston 2', color: 0xff6b6b, size: [0.4, 0.6, 0.4], offset: [0.6, -0.5, 0.5] },
+            { name: 'Crankshaft', color: 0x4ecdc4, size: [2.2, 0.3, 0.3], offset: [0, -1, 0] },
+            { name: 'Camshaft', color: 0x45b7d1, size: [1.6, 0.2, 0.2], offset: [0, 1.2, 0] },
+            { name: 'Oil Pan', color: 0x95a5a6, size: [2.1, 0.4, 1.6], offset: [0, -1.5, 0] },
+            { name: 'Timing Belt', color: 0x2c3e50, size: [0.1, 1.5, 0.1], offset: [1, 0.2, 0.8] },
+            { name: 'Alternator', color: 0xf39c12, size: [0.6, 0.5, 0.5], offset: [-1.2, 0, 0.8] },
+            { name: 'Starter Motor', color: 0xe67e22, size: [0.5, 0.4, 0.4], offset: [1.2, -0.5, 0.8] },
+        ];
+
+        // Create 3D parts
+        const parts = [];
+        engineParts.forEach((partData, index) => {
+            const geometry = new THREE.BoxGeometry(...partData.size);
+            const material = new THREE.MeshStandardMaterial({
+                color: partData.color,
+                metalness: 0.8,
+                roughness: 0.3,
+                emissive: partData.color,
+                emissiveIntensity: 0.1
+            });
+
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(...partData.offset);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+
+            // Store original position for animation
+            mesh.userData = {
+                name: partData.name,
+                originalPosition: new THREE.Vector3(...partData.offset),
+                explodedPosition: new THREE.Vector3(
+                    partData.offset[0] * 2.5,
+                    partData.offset[1] * 3,
+                    partData.offset[2] * 2.5
+                ),
+                isExploded: false
+            };
+
+            scene.add(mesh);
+            parts.push(mesh);
+        });
+
+        document.getElementById('part-count').textContent = parts.length;
+
+        // Animation state
+        let isExploding = false;
+        let isAssembling = false;
+        let autoRotate = false;
+        let highlightMode = false;
+
+        // Explode function
+        function explodeView() {
+            if (isExploding) return;
+            isExploding = true;
+            isAssembling = false;
+
+            parts.forEach((part, index) => {
+                setTimeout(() => {
+                    animateTo(part, part.userData.explodedPosition, 1000);
+                    part.userData.isExploded = true;
+                }, index * 100);
+            });
+
+            setTimeout(() => {
+                isExploding = false;
+            }, parts.length * 100 + 1000);
+        }
+
+        // Assemble function
+        function assembleView() {
+            if (isAssembling) return;
+            isAssembling = true;
+            isExploding = false;
+
+            parts.forEach((part, index) => {
+                setTimeout(() => {
+                    animateTo(part, part.userData.originalPosition, 1000);
+                    part.userData.isExploded = false;
+                }, index * 50);
+            });
+
+            setTimeout(() => {
+                isAssembling = false;
+            }, parts.length * 50 + 1000);
+        }
+
+        // Smooth animation helper
+        function animateTo(object, targetPosition, duration) {
+            const startPos = object.position.clone();
+            const startTime = Date.now();
+
+            function update() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                // Ease out cubic
+                const eased = 1 - Math.pow(1 - progress, 3);
+
+                object.position.lerpVectors(startPos, targetPosition, eased);
+
+                if (progress < 1) {
+                    requestAnimationFrame(update);
+                }
+            }
+
+            update();
+        }
+
+        // Highlight mode
+        function toggleHighlight() {
+            highlightMode = !highlightMode;
+
+            parts.forEach((part, index) => {
+                if (highlightMode) {
+                    // Pulse effect
+                    const delay = index * 100;
+                    setTimeout(() => {
+                        part.material.emissiveIntensity = 0.5;
+                        setTimeout(() => {
+                            part.material.emissiveIntensity = 0.1;
+                        }, 500);
+                    }, delay);
+                } else {
+                    part.material.emissiveIntensity = 0.1;
+                }
+            });
+        }
+
+        // Mouse interaction
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let hoveredPart = null;
+
+        window.addEventListener('mousemove', (event) => {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        });
+
+        // UI event listeners
+        document.getElementById('explode-btn').addEventListener('click', explodeView);
+        document.getElementById('assemble-btn').addEventListener('click', assembleView);
+        document.getElementById('rotate-btn').addEventListener('click', () => {
+            autoRotate = !autoRotate;
+        });
+        document.getElementById('highlight-btn').addEventListener('click', toggleHighlight);
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Auto rotate
+            if (autoRotate) {
+                parts.forEach(part => {
+                    part.rotation.y += 0.01;
+                });
+            }
+
+            // Raycasting for hover effects
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(parts);
+
+            // Reset previous hover
+            if (hoveredPart && !intersects.find(i => i.object === hoveredPart)) {
+                hoveredPart.material.emissiveIntensity = 0.1;
+                hoveredPart = null;
+            }
+
+            // Set new hover
+            if (intersects.length > 0) {
+                const part = intersects[0].object;
+                if (part !== hoveredPart) {
+                    hoveredPart = part;
+                    part.material.emissiveIntensity = 0.4;
+
+                    // Show part name (in real app, would be 3D label in MR)
+                    console.log('Hovering:', part.userData.name);
+                }
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        console.log('🔧 Exploded View Demo Ready!');
+        console.log('💡 Click buttons to interact with the engine');
+    </script>
+</body>
+</html>

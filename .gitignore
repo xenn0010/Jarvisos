@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv_py311/
+env/
+venv/
+
+# Data
+holofabricator/backend/data/
+holofabricator/backend/uploads/
+holofabricator/backend/static/meshes/
+
+# Environment
+.env
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

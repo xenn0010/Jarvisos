@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HoloFabricator - Quest 3 Mesh Scanner</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: black;
+            color: white;
+            overflow: hidden;
+        }
+
+        #ar-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* AR HUD Overlay */
+        .hud {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid #00f7ff;
+            box-shadow: 0 0 30px rgba(0, 247, 255, 0.6);
+            max-width: 400px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .hud h2 {
+            color: #00f7ff;
+            font-size: 26px;
+            margin-bottom: 12px;
+            text-shadow: 0 0 15px #00f7ff;
+        }
+
+        .status {
+            font-size: 15px;
+            margin: 12px 0;
+            padding: 12px;
+            background: rgba(0, 247, 255, 0.15);
+            border-radius: 8px;
+            border-left: 4px solid #00f7ff;
+        }
+
+        .status.scanning {
+            border-left-color: #ffaa00;
+            animation: pulse 1.2s ease-in-out infinite;
+        }
+
+        .status.success {
+            border-left-color: #00ff00;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(0.98); }
+        }
+
+        .parts-panel {
+            position: fixed;
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid #00f7ff;
+            max-width: 320px;
+            max-height: 75vh;
+            overflow-y: auto;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .part-label {
+            background: rgba(0, 247, 255, 0.2);
+            border: 2px solid #00f7ff;
+            padding: 10px 15px;
+            margin: 8px 0;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .part-label:hover {
+            background: rgba(0, 247, 255, 0.4);
+            transform: translateX(-8px);
+            border-color: #00ffff;
+        }
+
+        .part-label.highlighted {
+            border-color: #00ff00;
+            background: rgba(0, 255, 0, 0.35);
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+        }
+
+        #start-ar-btn {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #00f7ff 0%, #0066ff 100%);
+            border: none;
+            padding: 25px 50px;
+            color: white;
+            font-size: 22px;
+            font-weight: bold;
+            border-radius: 12px;
+            cursor: pointer;
+            box-shadow: 0 8px 30px rgba(0, 247, 255, 0.7);
+            pointer-events: auto;
+            z-index: 2000;
+        }
+
+        #start-ar-btn:hover {
+            transform: translate(-50%, -50%) scale(1.08);
+            box-shadow: 0 12px 40px rgba(0, 247, 255, 0.9);
+        }
+
+        .gesture-controls {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.85);
+            padding: 18px 35px;
+            border-radius: 25px;
+            border: 2px solid #00f7ff;
+            font-size: 17px;
+            text-align: center;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .voice-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 0, 100, 0.9);
+            padding: 12px 20px;
+            border-radius: 20px;
+            border: 2px solid #ff0066;
+            font-size: 14px;
+            z-index: 1000;
+            display: none;
+            animation: voicePulse 0.8s ease-in-out infinite;
+        }
+
+        @keyframes voicePulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 22px;
+            height: 22px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #00f7ff;
+            animation: spin 0.7s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .object-info {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(0, 255, 0, 0.1);
+            border-radius: 10px;
+            border: 1px solid #00ff00;
+        }
+
+        .object-info h3 {
+            color: #00ff00;
+            font-size: 20px;
+            margin-bottom: 8px;
+        }
+
+        .object-info p {
+            color: #ccc;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        /* Spatial labels (3D space) */
+        .spatial-label {
+            position: absolute;
+            background: rgba(0, 247, 255, 0.9);
+            color: black;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: bold;
+            pointer-events: none;
+            border: 2px solid #00ffff;
+            box-shadow: 0 0 20px rgba(0, 247, 255, 0.8);
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <div id="ar-container"></div>
+
+    <button id="start-ar-btn">🔧 Enter AR Scanner Mode</button>
+
+    <div class="hud" style="display: none;" id="hud">
+        <h2>🔧 HoloFabricator</h2>
+        <div id="status-display" class="status">
+            Initializing AR...
+        </div>
+        <div id="object-info" class="object-info" style="display: none;">
+            <h3 id="object-name"></h3>
+            <p id="object-description"></p>
+        </div>
+    </div>
+
+    <div class="parts-panel" style="display: none;" id="parts-panel">
+        <h3 style="color: #00f7ff; margin-bottom: 12px; font-size: 18px;">🔍 Identified Parts</h3>
+        <div id="parts-list"></div>
+    </div>
+
+    <div class="gesture-controls" style="display: none;" id="gesture-hint">
+        🎮 Trigger: Scan Object | 🎤 Voice: "Scan this" or "What is this?"
+    </div>
+
+    <div class="voice-indicator" id="voice-indicator">
+        🎤 Listening...
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+        const API_URL = 'http://localhost:8000';
+
+        let xrSession = null;
+        let currentScanId = null;
+        let scene, camera, renderer, xrRefSpace;
+        let detectedMeshes = new Map();
+        let spatialAnchors = [];
+        let currentAnalysis = null;
+        let recognitionActive = false;
+
+        // UI elements
+        const startBtn = document.getElementById('start-ar-btn');
+        const hud = document.getElementById('hud');
+        const statusDisplay = document.getElementById('status-display');
+        const gestureHint = document.getElementById('gesture-hint');
+        const partsPanel = document.getElementById('parts-panel');
+        const objectInfo = document.getElementById('object-info');
+        const voiceIndicator = document.getElementById('voice-indicator');
+
+        // Setup Three.js AR scene
+        function setupScene() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100);
+
+            renderer = new THREE.WebGLRenderer({
+                antialias: true,
+                alpha: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true;
+            document.getElementById('ar-container').appendChild(renderer.domElement);
+
+            // Lighting for virtual objects
+            const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.5);
+            light.position.set(0, 5, 0);
+            scene.add(light);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+            dirLight.position.set(3, 10, 10);
+            scene.add(dirLight);
+
+            console.log('✅ Three.js scene initialized');
+        }
+
+        // Start AR Session
+        startBtn.addEventListener('click', async () => {
+            if (!navigator.xr) {
+                alert('❌ WebXR not supported on this device');
+                return;
+            }
+
+            try {
+                // Check AR support
+                const supported = await navigator.xr.isSessionSupported('immersive-ar');
+                if (!supported) {
+                    alert('❌ AR mode not supported. Make sure you\'re on Quest 3 with latest browser.');
+                    return;
+                }
+
+                setupScene();
+
+                // Request AR session with mesh detection!
+                xrSession = await navigator.xr.requestSession('immersive-ar', {
+                    requiredFeatures: ['local-floor'],
+                    optionalFeatures: [
+                        'mesh-detection',  // KEY FEATURE - Quest room meshes
+                        'hand-tracking',
+                        'hit-test',
+                        'anchors'
+                    ]
+                });
+
+                await renderer.xr.setSession(xrSession);
+                xrRefSpace = await xrSession.requestReferenceSpace('local-floor');
+
+                // Hide start button, show AR UI
+                startBtn.style.display = 'none';
+                hud.style.display = 'block';
+                gestureHint.style.display = 'block';
+
+                updateStatus('✅ AR Mode Active - Looking for objects...', 'success');
+                console.log('✅ AR Session started with mesh-detection');
+
+                // Setup controllers
+                setupControllers();
+
+                // Setup voice commands
+                setupVoiceCommands();
+
+                // Start render loop
+                renderer.setAnimationLoop(renderAR);
+
+            } catch (error) {
+                console.error('❌ Failed to start AR:', error);
+                alert(`Could not start AR: ${error.message}\n\nMake sure:\n1. You're on Quest 3\n2. Browser has camera permissions\n3. Room is scanned in Space Setup`);
+            }
+        });
+
+        // Setup controller inputs
+        function setupControllers() {
+            let wasTriggerPressed = false;
+
+            window.checkControllers = (frame) => {
+                if (!xrSession) return;
+
+                for (const source of xrSession.inputSources) {
+                    if (source.gamepad) {
+                        const gamepad = source.gamepad;
+
+                        // Trigger button (index 0) to scan
+                        if (gamepad.buttons[0] && gamepad.buttons[0].pressed) {
+                            if (!wasTriggerPressed) {
+                                wasTriggerPressed = true;
+                                captureAndAnalyzeMesh(frame);
+                            }
+                        } else {
+                            wasTriggerPressed = false;
+                        }
+                    }
+                }
+            };
+        }
+
+        // Setup voice recognition
+        function setupVoiceCommands() {
+            if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+                console.warn('⚠️ Voice recognition not supported');
+                return;
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const recognition = new SpeechRecognition();
+
+            recognition.continuous = true;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = () => {
+                recognitionActive = true;
+                voiceIndicator.style.display = 'block';
+                console.log('🎤 Voice recognition started');
+            };
+
+            recognition.onresult = (event) => {
+                const last = event.results.length - 1;
+                const command = event.results[last][0].transcript.toLowerCase().trim();
+
+                console.log('🎤 Voice command:', command);
+
+                if (command.includes('scan this') || command.includes('scan object')) {
+                    updateStatus('🎤 Voice: Scanning...', 'scanning');
+                    captureAndAnalyzeMesh();
+                } else if (command.includes('what is this') || command.includes('identify')) {
+                    if (currentAnalysis) {
+                        speakResponse(`This is a ${currentAnalysis.object_name}. ${currentAnalysis.description}`);
+                    } else {
+                        speakResponse('Please scan an object first');
+                    }
+                } else if (command.includes('explode') || command.includes('show parts')) {
+                    explodeView();
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.error('🎤 Speech error:', event.error);
+            };
+
+            recognition.onend = () => {
+                voiceIndicator.style.display = 'none';
+                if (recognitionActive) {
+                    // Restart if still active
+                    setTimeout(() => recognition.start(), 500);
+                }
+            };
+
+            // Start recognition
+            try {
+                recognition.start();
+            } catch (e) {
+                console.warn('⚠️ Could not start voice recognition:', e);
+            }
+
+            // Stop on session end
+            xrSession.addEventListener('end', () => {
+                recognitionActive = false;
+                recognition.stop();
+            });
+        }
+
+        // Text-to-speech
+        function speakResponse(text) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.1;
+            utterance.pitch = 1;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // Capture and analyze detected mesh
+        async function captureAndAnalyzeMesh(frame) {
+            updateStatus('🔍 Searching for object meshes...', 'scanning');
+            console.log('🎯 Scan triggered - looking for meshes');
+
+            if (!frame) {
+                // Get current frame if not provided
+                console.warn('⚠️ No XR frame available yet');
+                updateStatus('⚠️ No scan data available - try again', 'error');
+                return;
+            }
+
+            try {
+                // Get detected meshes from Quest
+                const meshes = frame.detectedMeshes;
+
+                if (!meshes || meshes.size === 0) {
+                    updateStatus('❌ No meshes detected. Make sure room is scanned in Space Setup.', 'error');
+                    console.log('💡 Hint: Go to Settings > Space Setup > Scan Room');
+                    return;
+                }
+
+                console.log(`✅ Found ${meshes.size} detected meshes`);
+
+                // Find the most relevant mesh (not global mesh, not walls)
+                let targetMesh = null;
+                let targetLabel = null;
+
+                for (const [id, mesh] of meshes) {
+                    const label = mesh.semanticLabel || 'unknown';
+                    console.log(`  - Mesh: ${label} (${mesh.vertices?.length || 0} vertices)`);
+
+                    // Prefer objects over global mesh
+                    if (label !== 'global mesh' && label !== 'wall' && label !== 'floor' && label !== 'ceiling') {
+                        targetMesh = mesh;
+                        targetLabel = label;
+                        break;
+                    }
+                }
+
+                // Fallback to any mesh
+                if (!targetMesh && meshes.size > 0) {
+                    targetMesh = Array.from(meshes.values())[0];
+                    targetLabel = targetMesh.semanticLabel || 'detected object';
+                }
+
+                if (!targetMesh) {
+                    updateStatus('❌ No suitable object mesh found', 'error');
+                    return;
+                }
+
+                updateStatus(`📤 Uploading ${targetLabel} mesh...`, 'scanning');
+
+                // Extract mesh data
+                const vertices = Array.from(targetMesh.vertices);
+                const indices = Array.from(targetMesh.indices);
+
+                // Send to backend
+                const response = await fetch(`${API_URL}/upload-webxr-mesh`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        vertices: vertices,
+                        indices: indices,
+                        semantic_label: targetLabel
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Upload failed: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                currentScanId = data.scan_id;
+                currentAnalysis = data.analysis;
+
+                // Display results
+                displayAnalysis(currentAnalysis);
+                updateStatus(`✅ ${currentAnalysis.object_name} identified!`, 'success');
+
+                // Create spatial anchors for parts
+                if (targetMesh.meshSpace) {
+                    createSpatialLabels(targetMesh, currentAnalysis, frame);
+                }
+
+                speakResponse(`Identified ${currentAnalysis.object_name}`);
+
+            } catch (error) {
+                console.error('❌ Scan error:', error);
+                updateStatus(`❌ Scan failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Create 3D spatial labels for parts
+        function createSpatialLabels(mesh, analysis, frame) {
+            console.log('🏷️ Creating spatial labels for parts...');
+
+            // Get mesh pose in world space
+            const pose = frame.getPose(mesh.meshSpace, xrRefSpace);
+            if (!pose) return;
+
+            const meshMatrix = new THREE.Matrix4().fromArray(pose.transform.matrix);
+
+            // For each part, create a label at an estimated position
+            analysis.parts.forEach((part, index) => {
+                // Simple heuristic: distribute labels around mesh
+                const angle = (index / analysis.parts.length) * Math.PI * 2;
+                const radius = 0.3;
+
+                const labelPos = new THREE.Vector3(
+                    Math.cos(angle) * radius,
+                    0.2 + index * 0.15,  // Stack vertically
+                    Math.sin(angle) * radius
+                );
+
+                labelPos.applyMatrix4(meshMatrix);
+
+                // Create label sprite
+                const labelDiv = createLabelSprite(part.name, labelPos);
+                spatialAnchors.push(labelDiv);
+            });
+
+            console.log(`✅ Created ${analysis.parts.length} spatial labels`);
+        }
+
+        // Create label sprite in 3D
+        function createLabelSprite(text, position) {
+            // Create CSS3D label (simplified - in production use CSS3DRenderer)
+            const label = document.createElement('div');
+            label.className = 'spatial-label';
+            label.textContent = text;
+            label.style.left = '50%';
+            label.style.top = '50%';
+            document.body.appendChild(label);
+
+            // Update position in render loop
+            label.worldPosition = position;
+
+            return label;
+        }
+
+        // Display analysis results
+        function displayAnalysis(analysis) {
+            // Update HUD
+            document.getElementById('object-name').textContent = analysis.object_name;
+            document.getElementById('object-description').textContent = analysis.description;
+            objectInfo.style.display = 'block';
+
+            // Show parts panel
+            partsPanel.style.display = 'block';
+            const partsList = document.getElementById('parts-list');
+
+            partsList.innerHTML = analysis.parts.map((part, i) => `
+                <div class="part-label" data-part="${i}">
+                    <div style="font-weight: bold; margin-bottom: 5px;">${part.name}</div>
+                    <div style="font-size: 12px; color: #aaa;">${part.function}</div>
+                    <div style="font-size: 11px; color: #888; margin-top: 4px;">
+                        📍 ${part.location} • 🔧 ${part.material}
+                    </div>
+                </div>
+            `).join('');
+
+            // Click handlers
+            document.querySelectorAll('.part-label').forEach(tag => {
+                tag.addEventListener('click', () => {
+                    document.querySelectorAll('.part-label').forEach(t => t.classList.remove('highlighted'));
+                    tag.classList.add('highlighted');
+
+                    const partName = tag.querySelector('div').textContent;
+                    speakResponse(`${partName}: ${analysis.parts[tag.dataset.part].function}`);
+                });
+            });
+
+            console.log('✅ Analysis displayed');
+        }
+
+        // Explode view animation
+        function explodeView() {
+            updateStatus('💥 Exploded view activated', 'success');
+            speakResponse('Showing exploded view');
+            // TODO: Implement part separation animation
+            console.log('💥 Explode view triggered');
+        }
+
+        // Update status display
+        function updateStatus(message, type = '') {
+            statusDisplay.textContent = message;
+            statusDisplay.className = `status ${type}`;
+
+            if (type === 'scanning') {
+                statusDisplay.innerHTML = `<span class="loading-spinner"></span> ${message}`;
+            }
+        }
+
+        // AR render loop
+        function renderAR(time, frame) {
+            if (!frame) return;
+
+            // Check controller inputs
+            if (window.checkControllers) {
+                window.checkControllers(frame);
+            }
+
+            // Update spatial label positions
+            if (camera) {
+                spatialAnchors.forEach(label => {
+                    if (label.worldPosition) {
+                        const screenPos = label.worldPosition.clone().project(camera);
+
+                        label.style.transform = `translate(-50%, -50%) translate(${
+                            (screenPos.x * 0.5 + 0.5) * window.innerWidth
+                        }px, ${
+                            (-screenPos.y * 0.5 + 0.5) * window.innerHeight
+                        }px)`;
+
+                        // Hide if behind camera
+                        label.style.opacity = screenPos.z < 1 ? '1' : '0';
+                    }
+                });
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Keyboard fallback for browser testing
+        document.addEventListener('keydown', (e) => {
+            if (e.key === ' ' || e.key === 'Enter') {
+                console.log('⌨️ Keyboard scan trigger');
+                captureAndAnalyzeMesh();
+            }
+        });
+
+        console.log('🚀 HoloFabricator Quest 3 Mesh Scanner Ready!');
+        console.log('💡 Click "Enter AR Scanner Mode" to start');
+        console.log('🎮 In AR: Pull trigger or say "scan this"');
+        console.log('⌨️ Browser test: Press SPACE');
+    </script>
+</body>
+</html>

@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HoloFabricator - Real 3D Twin</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: black;
+            color: #00f7ff;
+            overflow: hidden;
+        }
+
+        #ar-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .hud {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border: 2px solid #00f7ff;
+            border-radius: 10px;
+            max-width: 400px;
+            z-index: 1000;
+        }
+
+        .hud h2 {
+            color: #00f7ff;
+            font-size: 22px;
+            margin-bottom: 10px;
+        }
+
+        .status {
+            font-size: 14px;
+            padding: 10px;
+            background: rgba(0, 247, 255, 0.1);
+            border-left: 3px solid #00f7ff;
+            margin: 8px 0;
+        }
+
+        #start-btn {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #00f7ff, #0066ff);
+            border: none;
+            padding: 25px 50px;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            z-index: 2000;
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px 30px;
+            border: 2px solid #00f7ff;
+            border-radius: 20px;
+            z-index: 1000;
+            display: none;
+        }
+
+        .parts-list {
+            position: fixed;
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border: 2px solid #00f7ff;
+            border-radius: 10px;
+            max-width: 300px;
+            max-height: 70vh;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+
+        .part-item {
+            background: rgba(0, 247, 255, 0.1);
+            border: 1px solid #00f7ff;
+            padding: 10px;
+            margin: 6px 0;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .part-item:hover {
+            background: rgba(0, 247, 255, 0.3);
+            transform: translateX(-5px);
+        }
+
+        .part-item.active {
+            border-color: #ff00ff;
+            background: rgba(255, 0, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div id="ar-container"></div>
+
+    <button id="start-btn">🔧 START SCANNING</button>
+
+    <div class="hud" style="display: none;" id="hud">
+        <h2>HoloFabricator</h2>
+        <div id="status" class="status">Initializing...</div>
+    </div>
+
+    <div class="controls" id="controls">
+        🎮 TRIGGER: Scan | 👋 GRAB: Move | ↔️ SPREAD: Scale | 🔄 ROTATE: Spin
+    </div>
+
+    <div class="parts-list" id="parts-list">
+        <h3 style="color: #00f7ff; margin-bottom: 10px;">Components</h3>
+        <div id="parts-container"></div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const API_URL = 'http://localhost:8000';
+
+        let xrSession = null;
+        let scene, camera, renderer, xrRefSpace;
+        let scannedMesh = null;  // The REAL scanned mesh
+        let meshGroup = new THREE.Group();
+        let currentScanId = null;
+        let currentAnalysis = null;
+        let grabbedMesh = null;
+        let initialGrabDistance = 0;
+
+        // UI
+        const startBtn = document.getElementById('start-btn');
+        const hud = document.getElementById('hud');
+        const status = document.getElementById('status');
+        const controls = document.getElementById('controls');
+        const partsList = document.getElementById('parts-list');
+
+        // Setup scene
+        function setupScene() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true;
+            document.getElementById('ar-container').appendChild(renderer.domElement);
+
+            // Lighting
+            const ambient = new THREE.AmbientLight(0xffffff, 1);
+            scene.add(ambient);
+
+            const directional = new THREE.DirectionalLight(0xffffff, 1);
+            directional.position.set(5, 10, 7);
+            scene.add(directional);
+
+            console.log('✅ Scene ready');
+        }
+
+        // Start AR
+        startBtn.addEventListener('click', async () => {
+            if (!navigator.xr) {
+                alert('❌ WebXR not supported');
+                return;
+            }
+
+            try {
+                const supported = await navigator.xr.isSessionSupported('immersive-ar');
+                if (!supported) {
+                    alert('❌ AR not supported');
+                    return;
+                }
+
+                setupScene();
+
+                xrSession = await navigator.xr.requestSession('immersive-ar', {
+                    requiredFeatures: ['local-floor'],
+                    optionalFeatures: ['mesh-detection', 'hand-tracking', 'hit-test']
+                });
+
+                await renderer.xr.setSession(xrSession);
+                xrRefSpace = await xrSession.requestReferenceSpace('local-floor');
+
+                startBtn.style.display = 'none';
+                hud.style.display = 'block';
+                controls.style.display = 'block';
+
+                updateStatus('✅ AR Active - Pull trigger to scan object');
+
+                setupControllers();
+                renderer.setAnimationLoop(renderLoop);
+
+            } catch (error) {
+                console.error('❌ AR failed:', error);
+                alert(`AR failed: ${error.message}`);
+            }
+        });
+
+        // Controller setup
+        function setupControllers() {
+            let wasTriggerPressed = false;
+            let isGrabbing = false;
+            let controller1, controller2;
+
+            xrSession.inputSources.forEach((source, i) => {
+                if (source.targetRayMode === 'tracked-pointer') {
+                    const controller = renderer.xr.getController(i);
+                    scene.add(controller);
+                    if (i === 0) controller1 = controller;
+                    else controller2 = controller;
+                }
+            });
+
+            window.checkControllers = (frame) => {
+                if (!xrSession) return;
+
+                for (const source of xrSession.inputSources) {
+                    if (source.gamepad) {
+                        const gamepad = source.gamepad;
+
+                        // TRIGGER: Scan object
+                        if (gamepad.buttons[0] && gamepad.buttons[0].pressed) {
+                            if (!wasTriggerPressed) {
+                                wasTriggerPressed = true;
+                                scanObject(frame);
+                            }
+                        } else {
+                            wasTriggerPressed = false;
+                        }
+
+                        // GRIP: Grab and move mesh
+                        if (gamepad.buttons[1] && gamepad.buttons[1].pressed) {
+                            if (!isGrabbing && scannedMesh) {
+                                isGrabbing = true;
+                                grabbedMesh = scannedMesh;
+                                console.log('✊ Grabbed mesh');
+                            }
+                        } else {
+                            if (isGrabbing) {
+                                isGrabbing = false;
+                                grabbedMesh = null;
+                                console.log('✋ Released mesh');
+                            }
+                        }
+
+                        // THUMBSTICK: Rotate mesh
+                        if (scannedMesh && gamepad.axes && gamepad.axes.length >= 2) {
+                            const x = gamepad.axes[2] || 0;
+                            const y = gamepad.axes[3] || 0;
+                            if (Math.abs(x) > 0.2) {
+                                meshGroup.rotation.y += x * 0.03;
+                            }
+                            if (Math.abs(y) > 0.2) {
+                                meshGroup.rotation.x += y * 0.03;
+                            }
+                        }
+                    }
+                }
+
+                // Update grabbed mesh position
+                if (isGrabbing && grabbedMesh && controller1) {
+                    const controllerPos = new THREE.Vector3();
+                    controller1.getWorldPosition(controllerPos);
+                    meshGroup.position.copy(controllerPos);
+                }
+            };
+        }
+
+        // Scan object
+        async function scanObject(frame) {
+            updateStatus('🔍 Scanning object...');
+
+            if (!frame) {
+                console.warn('⚠️ No frame');
+                return;
+            }
+
+            try {
+                const meshes = frame.detectedMeshes;
+
+                if (!meshes || meshes.size === 0) {
+                    updateStatus('❌ No meshes - scan room in Space Setup');
+                    return;
+                }
+
+                console.log(`✅ Found ${meshes.size} meshes`);
+
+                // Find object mesh (not walls/floor)
+                let targetMesh = null;
+                for (const [id, mesh] of meshes) {
+                    const label = mesh.semanticLabel || 'unknown';
+                    if (label !== 'global mesh' && label !== 'wall' &&
+                        label !== 'floor' && label !== 'ceiling') {
+                        targetMesh = mesh;
+                        break;
+                    }
+                }
+
+                if (!targetMesh && meshes.size > 0) {
+                    targetMesh = Array.from(meshes.values())[0];
+                }
+
+                if (!targetMesh) {
+                    updateStatus('❌ No suitable object found');
+                    return;
+                }
+
+                updateStatus('📤 Uploading mesh to backend...');
+
+                // Extract REAL mesh data from Quest
+                const vertices = Array.from(targetMesh.vertices);
+                const indices = Array.from(targetMesh.indices);
+
+                console.log(`📊 Mesh data: ${vertices.length/3} vertices, ${indices.length/3} triangles`);
+
+                // Upload to backend
+                const response = await fetch(`${API_URL}/upload-webxr-mesh`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        vertices: vertices,
+                        indices: indices,
+                        semantic_label: targetMesh.semanticLabel || 'object'
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Upload failed: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                currentScanId = data.scan_id;
+                currentAnalysis = data.analysis;
+
+                updateStatus('🧠 Gemini analyzing... (30-45s)');
+
+                // Wait for analysis
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                updateStatus('✅ Analysis complete - Loading 3D twin...');
+
+                // Load the REAL mesh
+                await loadRealMesh(data.mesh_file, targetMesh.meshSpace, frame);
+
+                // Display parts
+                displayParts(currentAnalysis);
+
+                updateStatus(`✅ ${currentAnalysis.object_name} - 3D Twin Ready`);
+                speak(`Loaded ${currentAnalysis.object_name}`);
+
+            } catch (error) {
+                console.error('❌ Scan error:', error);
+                updateStatus(`❌ Error: ${error.message}`);
+            }
+        }
+
+        // Load REAL mesh (not shader effects)
+        async function loadRealMesh(meshUrl, meshSpace, frame) {
+            updateStatus('📦 Loading real mesh geometry...');
+
+            // Remove old mesh
+            if (scannedMesh) {
+                meshGroup.remove(scannedMesh);
+            }
+
+            const loader = new PLYLoader();
+
+            return new Promise((resolve, reject) => {
+                loader.load(meshUrl, (geometry) => {
+                    console.log('✅ PLY loaded');
+
+                    // Compute normals for proper lighting
+                    geometry.computeVertexNormals();
+                    geometry.center();
+
+                    // Create REALISTIC material (not hologram shader)
+                    const material = new THREE.MeshStandardMaterial({
+                        color: 0x888888,
+                        metalness: 0.3,
+                        roughness: 0.7,
+                        side: THREE.DoubleSide
+                    });
+
+                    // THIS IS THE REAL SCANNED MESH
+                    scannedMesh = new THREE.Mesh(geometry, material);
+
+                    // Auto-scale to reasonable size
+                    const bbox = new THREE.Box3().setFromObject(scannedMesh);
+                    const size = bbox.getSize(new THREE.Vector3());
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    const scale = 0.4 / maxDim;  // 40cm max
+                    scannedMesh.scale.setScalar(scale);
+
+                    meshGroup.add(scannedMesh);
+
+                    // Position in AR space
+                    if (meshSpace && frame) {
+                        const pose = frame.getPose(meshSpace, xrRefSpace);
+                        if (pose) {
+                            const matrix = new THREE.Matrix4().fromArray(pose.transform.matrix);
+                            meshGroup.position.setFromMatrixPosition(matrix);
+                        } else {
+                            meshGroup.position.set(0, 1, -0.6);
+                        }
+                    } else {
+                        meshGroup.position.set(0, 1, -0.6);
+                    }
+
+                    scene.add(meshGroup);
+
+                    console.log('✅ Real mesh displayed in AR');
+                    resolve();
+
+                }, undefined, reject);
+            });
+        }
+
+        // Display parts list
+        function displayParts(analysis) {
+            if (!analysis || !analysis.parts || analysis.parts.length === 0) {
+                return;
+            }
+
+            partsList.style.display = 'block';
+            const container = document.getElementById('parts-container');
+
+            container.innerHTML = analysis.parts.map((part, i) => `
+                <div class="part-item" onclick="highlightPart(${i})">
+                    <div style="font-weight: bold; margin-bottom: 4px;">${part.name}</div>
+                    <div style="font-size: 12px; color: #aaa;">${part.function}</div>
+                </div>
+            `).join('');
+        }
+
+        // Highlight part
+        window.highlightPart = function(index) {
+            document.querySelectorAll('.part-item').forEach((el, i) => {
+                el.classList.toggle('active', i === index);
+            });
+
+            if (currentAnalysis && currentAnalysis.parts[index]) {
+                const part = currentAnalysis.parts[index];
+                speak(`${part.name}: ${part.function}`);
+            }
+        };
+
+        // Update status
+        function updateStatus(message) {
+            status.textContent = message;
+        }
+
+        // TTS
+        function speak(text) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.1;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // Render loop
+        function renderLoop(timestamp, frame) {
+            if (!frame) return;
+
+            // Check controller inputs
+            if (window.checkControllers) {
+                window.checkControllers(frame);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        console.log('🚀 Real 3D Twin System Ready');
+        console.log('💡 This loads the ACTUAL scanned mesh, not shader effects');
+    </script>
+</body>
+</html>

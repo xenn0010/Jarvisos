@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HoloFabricator - Tony Stark Workshop</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        #scene-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+
+        #ui-overlay {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 400px;
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+        }
+
+        h1 {
+            margin: 0 0 10px 0;
+            font-size: 24px;
+            color: #00f7ff;
+            text-shadow: 0 0 10px #00f7ff;
+        }
+
+        .feature {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 3px solid #00f7ff;
+        }
+
+        .feature strong {
+            color: #00f7ff;
+        }
+
+        button {
+            background: linear-gradient(135deg, #00f7ff 0%, #0066ff 100%);
+            border: none;
+            padding: 15px 30px;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 0;
+            width: 100%;
+            box-shadow: 0 4px 15px rgba(0, 247, 255, 0.4);
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 247, 255, 0.6);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        #status {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 255, 0, 0.2);
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #00f7ff;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="scene-container"></div>
+
+    <div id="ui-overlay">
+        <h1>🔧 HoloFabricator</h1>
+        <p style="font-size: 14px; margin-bottom: 15px;">Tony Stark Mixed Reality Workshop</p>
+
+        <div class="feature">
+            <strong>✓ WebXR Ready</strong>
+            <p style="font-size: 12px; margin: 5px 0 0 0;">Meta Quest 3 MR Support</p>
+        </div>
+
+        <div class="feature">
+            <strong>✓ AI Vision</strong>
+            <p style="font-size: 12px; margin: 5px 0 0 0;">Gemini-powered object recognition</p>
+        </div>
+
+        <div class="feature">
+            <strong>✓ 3D Scanning</strong>
+            <p style="font-size: 12px; margin: 5px 0 0 0;">Real-time depth sensing</p>
+        </div>
+
+        <div class="feature">
+            <strong>✓ Smart Procurement</strong>
+            <p style="font-size: 12px; margin: 5px 0 0 0;">Fetch.ai autonomous agents</p>
+        </div>
+
+        <button id="start-xr">🥽 Enter Mixed Reality</button>
+        <button id="test-ai">🤖 Test AI Vision (Desktop)</button>
+
+        <div id="status" style="display: none;"></div>
+    </div>
+
+    <!-- Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { VRButton } from 'three/addons/webxr/VRButton.js';
+
+        // Configuration
+        const API_URL = 'http://localhost:8000';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+
+        const camera = new THREE.PerspectiveCamera(
+            75,
+            window.innerWidth / window.innerHeight,
+            0.1,
+            1000
+        );
+        camera.position.set(0, 1.6, 3);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.xr.enabled = true;
+        document.getElementById('scene-container').appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(1, 1, 1);
+        scene.add(directionalLight);
+
+        // Add holographic grid
+        const gridHelper = new THREE.GridHelper(10, 10, 0x00f7ff, 0x0066ff);
+        gridHelper.material.opacity = 0.2;
+        gridHelper.material.transparent = true;
+        scene.add(gridHelper);
+
+        // Add floating cube (placeholder for scanned object)
+        const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+        const material = new THREE.MeshStandardMaterial({
+            color: 0x00f7ff,
+            emissive: 0x0066ff,
+            emissiveIntensity: 0.5,
+            metalness: 0.8,
+            roughness: 0.2
+        });
+        const cube = new THREE.Mesh(geometry, material);
+        cube.position.set(0, 1.5, -2);
+        scene.add(cube);
+
+        // Add holographic text (placeholder)
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = 512;
+        canvas.height = 256;
+        context.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        context.fillRect(0, 0, 512, 256);
+        context.font = 'bold 48px Arial';
+        context.fillStyle = '#00f7ff';
+        context.textAlign = 'center';
+        context.fillText('Scan Object', 256, 100);
+        context.font = '32px Arial';
+        context.fillStyle = '#ffffff';
+        context.fillText('Point at any object', 256, 160);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+        const sprite = new THREE.Sprite(spriteMaterial);
+        sprite.position.set(0, 2.5, -2);
+        sprite.scale.set(2, 1, 1);
+        scene.add(sprite);
+
+        // Animation loop
+        function animate() {
+            cube.rotation.x += 0.01;
+            cube.rotation.y += 0.01;
+
+            // Pulsing effect
+            const scale = 1 + Math.sin(Date.now() * 0.003) * 0.1;
+            cube.scale.set(scale, scale, scale);
+
+            renderer.render(scene, camera);
+        }
+
+        renderer.setAnimationLoop(animate);
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // UI Handlers
+        const statusDiv = document.getElementById('status');
+
+        function showStatus(message, isLoading = false) {
+            statusDiv.style.display = 'block';
+            statusDiv.innerHTML = isLoading
+                ? `<span class="loading"></span> ${message}`
+                : message;
+        }
+
+        // Enter XR button
+        document.getElementById('start-xr').addEventListener('click', async () => {
+            console.log('🔍 Checking WebXR support...');
+
+            if (!navigator.xr) {
+                showStatus('❌ WebXR not available. Install Meta Immersive Web Emulator extension and enable it.');
+                console.error('navigator.xr is undefined - WebXR not available');
+                return;
+            }
+
+            try {
+                showStatus('Checking XR support...', true);
+                console.log('📱 Checking immersive-vr session support...');
+
+                const supported = await navigator.xr.isSessionSupported('immersive-vr');
+                console.log('✓ immersive-vr supported:', supported);
+
+                if (!supported) {
+                    showStatus('❌ XR not supported. Make sure Meta Immersive Web Emulator is enabled in Chrome DevTools → WebXR tab');
+                    return;
+                }
+
+                console.log('🚀 Requesting XR session...');
+                const session = await navigator.xr.requestSession('immersive-vr', {
+                    optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking', 'layers']
+                });
+
+                console.log('✓ XR Session created:', session);
+
+                await renderer.xr.setSession(session);
+                console.log('✓ Renderer XR session set');
+
+                showStatus('✓ XR Session started! Check the emulator window.');
+
+                // Keep UI visible for 2 seconds before hiding
+                setTimeout(() => {
+                    document.getElementById('ui-overlay').style.display = 'none';
+                }, 2000);
+
+                session.addEventListener('end', () => {
+                    console.log('XR Session ended');
+                    document.getElementById('ui-overlay').style.display = 'block';
+                    showStatus('XR Session ended');
+                });
+
+            } catch (err) {
+                console.error('❌ XR Error:', err);
+                showStatus('❌ Error: ' + err.message + ' - Check console (F12) for details');
+            }
+        });
+
+        // Test AI button
+        document.getElementById('test-ai').addEventListener('click', async () => {
+            showStatus('Testing AI backend...', true);
+
+            try {
+                const response = await fetch(`${API_URL}/`);
+                const data = await response.json();
+                showStatus('✓ Backend connected: ' + data.name);
+                console.log('Backend response:', data);
+            } catch (err) {
+                showStatus('❌ Backend offline. Run: python backend/main.py');
+                console.error('Backend error:', err);
+            }
+        });
+
+        console.log('🚀 HoloFabricator initialized!');
+        console.log('📱 Use Meta Quest 3 or Immersive Web Emulator');
+        console.log('🔧 Start backend: cd backend && python main.py');
+    </script>
+</body>
+</html>

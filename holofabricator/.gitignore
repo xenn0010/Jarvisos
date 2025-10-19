@@ -1,0 +1,31 @@
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+venv_py311/
+
+# Uploads and generated files
+backend/uploads/
+backend/generated/
+backend/static/scans/
+backend/holofabricator.db
+*.ply
+*.obj
+*.glb
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
