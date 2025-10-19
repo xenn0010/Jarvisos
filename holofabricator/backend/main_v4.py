@@ -70,12 +70,12 @@ app.mount("/app", StaticFiles(directory=str(WEBXR_DIR), html=True), name="webxr"
 
 executor = ThreadPoolExecutor(max_workers=3)
 
-# Gemini - USING FLASH FOR SPEED (3-5s vs 30-45s)
+# Gemini - USING 2.5 FLASH FOR SPEED (3-5s vs 30-45s)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-2.0-flash-exp')
-    print("[OK] Gemini 2.0 Flash configured (FAST MODE)")
+    model = genai.GenerativeModel('gemini-2.5-flash')
+    print("[OK] Gemini 2.5 Flash configured (FAST MODE)")
 else:
     print("[WARNING] GEMINI_API_KEY not set")
     model = None
@@ -118,7 +118,7 @@ async def root():
         "name": "HoloFabricator API v4",
         "version": "4.0.0",
         "status": "operational" if GEMINI_API_KEY else "[WARNING] API key missing",
-        "model": "Gemini 2.5 Pro",
+        "model": "Gemini 2.5 Flash",
         "features": {
             "2d_image_upload": True,
             "3d_file_upload": True,
@@ -138,7 +138,7 @@ async def root():
             "GET /scans": "List all scans"
         },
         "gemini_features": {
-            "vision_analysis": "gemini-2.5-pro",
+            "vision_analysis": "gemini-2.5-flash",
             "voice_conversation": "gemini-live-2.5-flash-preview" if GEMINI_LIVE_AVAILABLE else "not available",
             "web_grounding": "Google Search integration",
             "native_audio": True if GEMINI_LIVE_AVAILABLE else False
